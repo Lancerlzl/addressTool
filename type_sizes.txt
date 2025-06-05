@@ -1,0 +1,40 @@
+# 数据类型_开始行
+int16 = 1
+int32 = 2
+Uint8 = 1
+Uint16 = 1
+Uint32 = 2
+float32 = 2
+float64 = 4
+Uint64 = 4
+int64 = 4
+short = 1
+long = 2
+unsigned char = 1
+unsigned short = 1
+unsigned long = 2
+float = 2
+long double = 4
+int = 1
+long = 2
+long long = 4
+unsigned int = 1
+unsigned long = 2
+unsigned long long = 4
+float = 2
+long double = 4
+# 数据类型_结束行
+
+# 常用变量_开始行
+电感电流:variable1
+电感电压:variable2
+# 常用变量_结束行
+
+# 变量前缀_开始行
+variable1
+variable2
+# 变量前缀_结束行
+
+# 错误信息_开始行
+
+# 错误信息_结束行
