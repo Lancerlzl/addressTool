@@ -17,6 +17,20 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+
+logging.basicConfig(format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s',
+                    level=logging.DEBUG)
+
+# logging.debug('debug级别，一般用来打印一些调试信息，级别最低')
+# logging.info('info级别，一般用来打印一些正常的操作信息')
+# logging.warning('waring级别，一般用来打印警告信息')
+# logging.error('error级别，一般用来打印一些错误信息')
+# logging.critical('critical级别，一般用来打印一些致命的错误信息，等级最高')
+
+
 
 class ArrayVariable:
     def __init__(self, var_name):
@@ -852,6 +866,7 @@ if __name__ == '__main__':
     else:
          # 运行在开发环境中
         current_dir = os.path.dirname(os.path.abspath(__file__))
+    logging.debug('debug级别，一般用来打印一些调试信息，级别最低')    
     os.chdir(current_dir)
     app = QApplication(sys.argv)
     ex = AddressFinder()
