@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
     QMessageBox, QCompleter, QListWidget, QListWidgetItem, QDialog, QDialogButtonBox, QFrame
 )
 from PyQt6.QtCore import Qt
+
 RANGE_define = 20  # 定义变量数
 
 import logging
@@ -497,7 +498,17 @@ def get_variable_type_regular_array1(dwarf_info, array_var):
                                                                 return array_var.die_name   #找到数组的变量数据类型的名字
                                                            
                         break
-                            
+            #######################################################################
+            # array_var.die_name = 找到数组的变量数据类型的名字      兼容集中式储能                              
+            #################################################################### 
+            # 假设 dwarf_info 是你的 ElementTree.Element 对象，这里简化示例
+            for die in dwarf_info.iter('die'):
+                if die.get('id') == array_var.typeidref:
+                    die_name = die.find(".//attribute[type='DW_AT_name']/value/string")
+                    if die_name is not None:
+                        array_var.die_name   = die_name.text
+                        return array_var.die_name
+         
     return None
 
 #######################################################################
@@ -659,6 +670,7 @@ def load_type_sizes(self):
     variables = default_variables.copy()
     common_variables = {}  # 存储常用变量
     Control_variables = {}  # 存储控制变量
+    Memory_variables = {}  # 存储历史变量
 
     start_marker = "# 数据类型_开始行"
     end_marker = "# 数据类型_结束行"
@@ -668,11 +680,14 @@ def load_type_sizes(self):
     Controlvar_end_marker = "# 控制变量_结束行"
     prefix_start_marker = "# 变量前缀_开始行"
     prefix_end_marker = "# 变量前缀_结束行"
+    VarMemory_start_marker = "# 变量存储_开始行"
+    VarMemory_end_marker = "# 变量存储_结束行"
 
     reading_sizes = False
     reading_vars = False
     reading_prefixes = False
     reading_Controlvars = False
+    reading_VarMemory = False
 
     # 获取当前脚本或EXE的目录
     if getattr(sys, 'frozen', False):
@@ -690,6 +705,7 @@ def load_type_sizes(self):
         with open(file_path, 'r') as file:
             file_type_sizes = {}
             file_variables = []
+            VAR_variables = []
             for line in file:
                 line = line.strip()
                 if line == start_marker:
@@ -716,6 +732,12 @@ def load_type_sizes(self):
                 elif line == Controlvar_end_marker:
                     reading_Controlvars = False
                     continue  
+                elif line == VarMemory_start_marker:
+                    reading_VarMemory = True
+                    continue
+                elif line == VarMemory_end_marker:
+                    reading_VarMemory = False
+                    continue
 
                 if reading_sizes:
                     parts = line.split('=')
@@ -740,16 +762,20 @@ def load_type_sizes(self):
                 if reading_prefixes:
                     file_variables.append(line)
 
+                if reading_VarMemory:
+                    VAR_variables.append(line)
             # 如果文件中有数据，则使用文件中的数据
             if file_type_sizes:
                 type_sizes = file_type_sizes
             if file_variables:
                 variables = file_variables
+            if VAR_variables:
+                Memory_variables = VAR_variables
 
     except Exception as e:
         print(f"加载type_sizes.txt时发生错误: {e}")
         #QMessageBox.warning(self, "警告", "加载type_sizes.txt时发生错误")
-    return type_sizes, variables, common_variables,Control_variables  # 增加返回 common_variables
+    return type_sizes, variables, common_variables,Control_variables,Memory_variables  # 增加返回 common_variables
 
 
 
@@ -781,12 +807,141 @@ def parse_dwarf_xml(xml_file):
     except Exception as e:
         print(f"读取文件时发生未知错误: {e}")
         return None
+    
+
+#######################################################################
+# @brief 函数名称：write_var_to_memory_block                   
+# @todo 代码实现的功能: 适配GB2312编码，清空并写入 # 变量存储_开始行 和 # 变量存储_结束行 之间的内容
+#    :param file_path: txt文件路径
+#    :param var_names: 要写入的变量名列表（非空的var_name）
+####################################################################
+def write_var_to_memory_block(file_path, var_names):
+   
+    # 固定标记（和你的txt格式完全一致）
+    start_tag = "# 变量存储_开始行"
+    end_tag = "# 变量存储_结束行"
+
+    # 1. 读取文件（GB2312编码，忽略解码错误）
+    lines = []
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r', encoding='gb2312') as f:
+                lines = [line.rstrip('\n') for line in f]  # 保留每行内容，去掉换行符
+        except Exception as e:
+            print(f"读取文件（GB2312）：{e}，尝试忽略错误读取")
+            with open(file_path, 'r', encoding='gb2312', errors='ignore') as f:
+                lines = [line.rstrip('\n') for line in f]
+
+    # 2. 定位开始/结束标记的位置
+    start_idx = -1
+    end_idx = -1
+    for i, line in enumerate(lines):
+        if line.strip() == start_tag:
+            start_idx = i
+        elif line.strip() == end_tag:
+            end_idx = i
+
+    # 3. 构建新内容（清空标记间旧内容，写入新变量名）
+    new_lines = []
+    if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
+        # 保留开始标记前的内容
+        new_lines.extend(lines[:start_idx+1])
+        # 写入新变量名（每行一个，匹配你的格式）
+        new_lines.extend(var_names)
+        # 保留结束标记及之后的内容
+        new_lines.extend(lines[end_idx:])
+    else:
+        # 没找到标记，直接追加到文件末尾
+        new_lines = lines + [start_tag] + var_names + [end_tag]
+
+    # 4. 写入文件（固定GB2312编码）
+    try:
+        with open(file_path, 'w', encoding='gb2312') as f:
+            f.write('\n'.join(new_lines))
+        print(f"✅ 成功写入 {len(var_names)} 个变量到：{file_path}")
+    except Exception as e:
+        print(f"❌ 写入失败：{e}")
+
+
+def update_specific_line_in_txt(file_path, line_idx, new_var_name):
+    """
+    精准更新TXT中 # 变量存储_开始行 和 # 变量存储_结束行 之间的指定行
+    :param file_path: txt文件路径
+    :param line_idx: 要更新的行索引（从0开始，比如第5行=4）
+    :param new_var_name: 新的变量名（空则写空字符串）
+    """
+    # 固定标记
+    start_tag = "# 变量存储_开始行"
+    end_tag = "# 变量存储_结束行"
+    encoding = "gb2312"
+
+    # 1. 读取文件并拆分内容
+    all_lines = []
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r', encoding=encoding) as f:
+                all_lines = [line.rstrip('\n') for line in f]
+        except Exception as e:
+            print(f"读取文件失败：{e}")
+            with open(file_path, 'r', encoding=encoding, errors='ignore') as f:
+                all_lines = [line.rstrip('\n') for line in f]
+
+    # 2. 定位标记区间，提取原有变量行
+    start_idx = -1
+    end_idx = -1
+    # 找标记位置
+    for i, line in enumerate(all_lines):
+        if line.strip() == start_tag:
+            start_idx = i
+        elif line.strip() == end_tag:
+            end_idx = i
+
+    # 初始化标记区间内的变量行（无则创建空列表）
+    var_lines = []
+    if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
+        # 提取标记间的所有行（即原有变量列表）
+        var_lines = all_lines[start_idx+1 : end_idx]
+
+    # 3. 精准更新指定行（索引对应）
+    # 若要更新的行索引超出当前列表长度，补空行直到对应索引
+    if line_idx >= len(var_lines):
+        # 补空行（保证索引对应）
+        for _ in range(len(var_lines), line_idx + 1):
+            var_lines.append("")
+    # 替换指定行的内容
+    var_lines[line_idx] = new_var_name.strip()
+
+    # 4. 重构文件内容（保留标记+更新后的变量行）
+    new_all_lines = []
+    if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
+        # 保留开始标记前的内容
+        new_all_lines.extend(all_lines[:start_idx+1])
+        # 写入更新后的变量行
+        new_all_lines.extend(var_lines)
+        # 保留结束标记及之后的内容
+        new_all_lines.extend(all_lines[end_idx:])
+    else:
+        # 无标记则创建标记+变量行（补空行到指定索引）
+        var_lines = [""] * (line_idx + 1)
+        var_lines[line_idx] = new_var_name.strip()
+        new_all_lines = all_lines + [start_tag] + var_lines + [end_tag]
+
+    # 5. 写回文件
+    try:
+        with open(file_path, 'w', encoding=encoding) as f:
+            f.write('\n'.join(new_all_lines))
+        print(f"✅ 成功更新TXT第{line_idx+1}行：{new_var_name}")
+    except Exception as e:
+        print(f"❌ 更新失败：{e}")
+
+
+
 
 
 class AddressFinder(QWidget):
     def __init__(self):
         super().__init__()
-        self.type_sizes, self.variables, self.common_variables, self.Control_variables = load_type_sizes(self)  # 获取常用变量
+        self.type_sizes, self.variables, self.common_variables, self.Control_variables , self.Memory_variables = load_type_sizes(self)  # 获取常用变量
         self.initUI()
         self.previous_variables = [""] * RANGE_define
 
@@ -800,12 +955,16 @@ class AddressFinder(QWidget):
         top_layout = QHBoxLayout()  # 创建一个水平布局管理器（QHBoxLayout），用于将窗口部件按照水平方向排列。
 
         info_layout = QVBoxLayout()  # 再次创建一个垂直布局管理器，用于在顶部信息布局下方添加额外的信息部件。
-        self.company_version_label = QLabel("公司: Sineng  版本: 1.0.8 ")
+        self.company_version_label = QLabel("公司: Sineng  版本: 1.1.0 ")
         self.TODO_label = QLabel("TODO: 不支持二维数组以上的搜索;  局部刷新只会更新名称有变化的变量;")
         self.TODO_label1 = QLabel("系数   U16变量:0    电流:336     电网电压:690   母线电压:1200")
         info_layout.addWidget(self.company_version_label)
         info_layout.addWidget(self.TODO_label)
         info_layout.addWidget(self.TODO_label1)
+
+        self.Var_refres_button = QPushButton("变量记录")
+        self.Var_refres_button.clicked.connect(self.Var_refres)  # 刷新函数
+        self.Var_refres_button.setFixedSize(80, 80)
 
         self.refresh_button = QPushButton("刷新")
         self.refresh_button.clicked.connect(self.refresh_addresses)  # 刷新函数
@@ -821,6 +980,7 @@ class AddressFinder(QWidget):
 
         top_layout.addLayout(info_layout)
         top_layout.addStretch(1)
+        top_layout.addWidget(self.Var_refres_button)
         top_layout.addWidget(self.refresh_button)
         top_layout.addWidget(self.partial_refresh_button)
         top_layout.addWidget(self.refresh_xml_button)
@@ -928,12 +1088,14 @@ class AddressFinder(QWidget):
             item = QListWidgetItem(var)
             var_list.addItem(item)
 
+        # 6. 定义「选中变量后的回调函数」（核心逻辑）
         def on_var_selected():
             selected_items = var_list.selectedItems()
             if selected_items:
                 self.var_inputs[idx].setText(selected_items[0].text())
             dialog.accept()
 
+        #绑定「列表项双击事件」：双击列表项时触发选中逻辑
         var_list.itemDoubleClicked.connect(on_var_selected)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, dialog)
@@ -991,7 +1153,13 @@ class AddressFinder(QWidget):
         if path:
             self.out_input.setText(path)
 
+    def Var_refres(self):
+        loop_count = min(len(self.Memory_variables), 20)
+        for idx in range(loop_count):
+            self.var_inputs[idx].setText(self.Memory_variables[idx])
+
     def refresh_addresses(self):
+        valid_var_names = []
         self.refresh_xml_file()
         dwarf_info = parse_dwarf_xml(self.xml_file)
         if dwarf_info is None:
@@ -1010,13 +1178,21 @@ class AddressFinder(QWidget):
                     self.addr_outputs[i].setText("未找到/数组地址越界")
                     self.sn_addr_outputs[i].setText("未找到/数组地址越界")
                 self.previous_variables[i] = var_name
-
+                valid_var_names.append(var_name)
+            # TODO
+        current_directory = os.path.abspath(os.getcwd())    
+        txt_file_path = os.path.join(current_directory, 'type_sizes.txt')
+        write_var_to_memory_block(txt_file_path, valid_var_names)
 
     def partial_refresh_addresses(self):
         dwarf_info = parse_dwarf_xml(self.xml_file)
         if dwarf_info is None:
             QMessageBox.warning(self, "错误", "解析XML文件失败")
             return
+        
+        current_directory = os.path.abspath(os.getcwd())    
+        txt_file_path = os.path.join(current_directory, 'type_sizes.txt')
+
         for i in range(RANGE_define):
             var_name = self.var_inputs[i].text().strip()
             if var_name != self.previous_variables[i]:
@@ -1030,6 +1206,7 @@ class AddressFinder(QWidget):
                     self.addr_outputs[i].setText("未找到/数组地址越界")
                     self.sn_addr_outputs[i].setText("未找到/数组地址越界")
                 self.previous_variables[i] = var_name
+                update_specific_line_in_txt(txt_file_path, line_idx=i, new_var_name=var_name)
 
     def refresh_xml_file(self):
         ofd6x_path = self.ofd6x_input.text().strip()
