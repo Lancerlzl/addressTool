@@ -13,9 +13,10 @@ import time
 import subprocess
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QFileDialog, 
-    QMessageBox, QCompleter, QListWidget, QListWidgetItem, QDialog, QDialogButtonBox
+    QMessageBox, QCompleter, QListWidget, QListWidgetItem, QDialog, QDialogButtonBox, QFrame
 )
 from PyQt6.QtCore import Qt
+RANGE_define = 20  # 定义变量数
 
 import logging
 
@@ -42,14 +43,17 @@ class ArrayVariable:
         self.offset_address = 0
         self.calculated_address = 0
         self.idref = 0
-        self.byte_size = 0  #数组大小
-        self.array_size = 0  #二维数组大小
-        self.typeidref = 0  # 数组类型的typeId
+        self.byte_size = 0      #   数组大小
+        self.array_size = 0     #   二维数组大小
+        self.typeidref = 0      #   数组类型的typeId
         self.die_name = 0
-        self.array_type = 0 # 0是正常的二维数组  #1是结构体二维数组
+        self.array_type = 0     # 0是正常的二维数组  #1是结构体二维数组
         self.element_byte_size = 0
-        self.element_byte_size_idref = 0 # 数组的bytesize的id
+        self.element_byte_size_idref = 0    # 数组的bytesize的id
         self.element_size = 0
+
+    #   判断数组是一维度还是二维，并计算二维数组大小 
+    #   解析一个带有数组索引的变量名，提取出变量的基础名称和数组索引信息
     def parse_var_name(self, var_name):
         name_parts = var_name.split('[')
         self.base_name = name_parts[0]
@@ -65,8 +69,9 @@ class ArrayVariable:
 
     # 计算二维数组的偏移地址
     def calculate_offset_address(self, type_sizes,A):
+        # 1.先找到数据类型大小
         if A == 1:
-            element_size =  int(self.element_byte_size, 16)
+            element_size =  int(self.element_byte_size, 16) # 说明找到数据类型大小
         elif self.die_name in type_sizes:
             element_size = type_sizes[self.die_name]
         else:
@@ -77,12 +82,12 @@ class ArrayVariable:
 
         byte_size_decimal = int(self.byte_size, 16)
 
-        if len(self.indices) == 1:
+        if len(self.indices) == 1:                      # 一维数组计算
             if (element_size * (self.indices[0] + 1)) > byte_size_decimal:
                 return None
             self.offset_address = element_size * self.indices[0]
 
-        elif len(self.indices) == 2:
+        elif len(self.indices) == 2:                    # 二维数组计算
             if not self.dimension_sizes or len(self.dimension_sizes) < 2:
                 return None
 
@@ -117,17 +122,14 @@ class ArrayVariable:
 def get_global_variable_address(dwarf_info, var_name):
     # 查找<symbol_table>元素
     symbol_table = dwarf_info.find('.//symbol_table')  # 使用XPath查找第一个<symbol_table>
-    if symbol_table is None:
-        # 如果没有找到<symbol_table>，则返回None
-        return None
-
-    var_name_with_prefix = f"_{var_name}"           #名字前面 + _
-    for symbol in symbol_table.iter('symbol'):
-        name_element = symbol.find('name')
-        if name_element is not None and name_element.text == var_name_with_prefix:
-            value_element = symbol.find('value')
-            if value_element is not None:
-                return int(value_element.text, 16)
+    if symbol_table is not None:
+        var_name_with_prefix = f"_{var_name}"           #名字前面 + _
+        for symbol in symbol_table.iter('symbol'):
+            name_element = symbol.find('name')
+            if name_element is not None and name_element.text == var_name_with_prefix:
+                value_element = symbol.find('value')
+                if value_element is not None:
+                    return int(value_element.text, 16)
             
     # 上面方法没找到的话，变量可能是局部静态变量，需要用另外的方法找        
     for die in dwarf_info.iter('die'):
@@ -140,19 +142,27 @@ def get_global_variable_address(dwarf_info, var_name):
                     return int(value_element, 16)      
     return None
 
-
+#######################################################################
+# @brief 函数名称：get_struct_member_offset                    
+# @todo 代码实现的功能: 查询结构体变量的偏移地址
+#                      
+####################################################################
 def get_struct_member_offset(dwarf_info, base_address, struct_name, member_name):
-    for die in dwarf_info.iter('die'):
-        name_attr = die.find(".//attribute[type='DW_AT_name']/value/string")
-        if name_attr is not None and name_attr.text == member_name:
-            offset_attr = die.find(".//attribute[type='DW_AT_data_member_location']/value/block")
+    for die in dwarf_info.iter('die'):                                              # 轮询die  
+        name_attr = die.find(".//attribute[type='DW_AT_name']/value/string")       
+        if name_attr is not None and name_attr.text == member_name:                 # 找到与变量名一样的id  
+            offset_attr = die.find(".//attribute[type='DW_AT_data_member_location']/value/block") # 找到里面的偏移地址  
             if offset_attr is not None:
                 offset_value = offset_attr.text.split()[-1]
                 offset = int(offset_value, 16)
                 return base_address + offset
     return None
 
-
+#######################################################################
+# @brief 函数名称：get_variable_address_array                    
+# @todo 代码实现的功能: 查询结构体的变量地址
+#                      
+####################################################################
 def get_variable_address_recursive(xml_file, var_name):
     names = var_name.split('.')
     base_address = get_global_variable_address(xml_file, names[0])
@@ -167,7 +177,11 @@ def get_variable_address_recursive(xml_file, var_name):
 
     return base_address
 
-
+#######################################################################
+# @brief 函数名称：get_variable_baseaddress_regular_array                    
+# @todo 代码实现的功能: 
+#                      找基地址
+####################################################################
 def get_variable_baseaddress_regular_array(dwarf_info, array_var):
     for die in dwarf_info.iter('die'):
         name_attr = die.find(".//attribute[type='DW_AT_name']/value/string")
@@ -183,10 +197,13 @@ def get_variable_baseaddress_regular_array(dwarf_info, array_var):
                     return base
     return None
 
-
+#######################################################################
+# @brief 函数名称：get_variable_type_regular_array                 
+# @todo 代码实现的功能: 找到数组类型的名字                      
+####################################################################
 def get_variable_type_regular_array(dwarf_info, array_var):
     for die in dwarf_info.iter('die'):
-        if die.get('id') == array_var.idref:
+        if die.get('id') == array_var.idref:        #遍历die 找到 idref  最后找到 数组类型的typeidref
             array_var.typeidref = die.find(".//attribute[type='DW_AT_type']/value/ref")
             if array_var.typeidref is not None:
                 array_var.typeidref = array_var.typeidref.get('idref')
@@ -202,7 +219,8 @@ def get_variable_type_regular_array(dwarf_info, array_var):
 
                         byte_size_element = die.find(".//attribute[type='DW_AT_byte_size']/value/const")
                         if byte_size_element is not None:
-                            array_var.byte_size = byte_size_element.text
+                            array_var.byte_size = byte_size_element.text # 数组大小
+                            
                         A = 0
                         for sub_die in die.findall('die'):
                             A = A+1 
@@ -229,46 +247,93 @@ def get_variable_type_regular_array(dwarf_info, array_var):
                                         return array_var.die_name
     return None
 
-#通过xml文件查找数组数据类型大小
+
+#######################################################################
+# @brief 函数名称：get_variable_type_regular_array_element_byte_size                  
+# @todo 代码实现的功能: #通过xml文件查找数组数据类型大小
+#@return 说明：1 说明找到数组类型大小   0 没找到数组类型大小
+####################################################################
 def get_variable_type_regular_array_element_byte_size(dwarf_info, array_var):
     for die in dwarf_info.iter('die'):
         if die.get('id') == array_var.typeidref:
             name_attr = die.find(".//attribute[type='DW_AT_name']/value/string")
-            if array_var.die_name == name_attr.text:
-                type_attr = die.find(".//attribute[type='DW_AT_type']/value/ref")
-                array_var.element_byte_size_idref = type_attr.get("idref")
+            if name_attr is not None and name_attr.text is not None:
+                if array_var.die_name == name_attr.text:
+                    type_attr = die.find(".//attribute[type='DW_AT_type']/value/ref")
+                    array_var.element_byte_size_idref = type_attr.get("idref")
+                    break 
+
     for die in dwarf_info.iter('die'):
         if die.get('id') == array_var.element_byte_size_idref:
-            array_var.element_byte_size = die.find(".//attribute[type='DW_AT_byte_size']/value/const").text
-            return 1             
+            DW_AT_byte_size_TEMP = die.find(".//attribute[type='DW_AT_byte_size']/value/const")
+            if DW_AT_byte_size_TEMP is not None: 
+                if die.find(".//attribute[type='DW_AT_byte_size']/value/const").text is not None: 
+                    array_var.element_byte_size = die.find(".//attribute[type='DW_AT_byte_size']/value/const").text
+                return 1     
+                
     return None
 
+#######################################################################
+# @brief 函数名称：get_variable_offsetaddress_regular_array                    
+# @todo 代码实现的功能: 
+#                      
+#       return： 返回基地址
+####################################################################
 def get_variable_offsetaddress_regular_array(dwarf_info, array_var, type_sizes):
     # 查找数组的类型和二维数组的大小
-    die_name = get_variable_type_regular_array(dwarf_info, array_var)
+    die_name = get_variable_type_regular_array1(dwarf_info, array_var)
     if die_name is None:
         return None
     A = get_variable_type_regular_array_element_byte_size(dwarf_info, array_var)
     return array_var.calculate_offset_address(type_sizes,A)
 
-
+#######################################################################
+# @brief 函数名称：get_variable_address_regular_array                    
+# @todo 代码实现的功能: 
+#                      通过数组名，找到基地址和偏移地址，并计算总地址
+####################################################################
 def get_variable_address_regular_array(xml_file, var_name, type_sizes):
     array_var = ArrayVariable(var_name)
     # 通过数组名，找到基地址和 数组的类型idref
     array_var.base_address = get_variable_baseaddress_regular_array(xml_file, array_var)
     if array_var.base_address is None:
         return None
-    offset_address = get_variable_offsetaddress_regular_array(xml_file, array_var, type_sizes)
+    
+    Returnresult = None
+    # 找到数组类型的名字：后面找不到数据类型大小，就用名字人为进行偏移
+    array_var.die_name = get_variable_type_regular_array1(xml_file, array_var) 
+    if array_var.die_name is None:
+        Returnresult = get_variable_type_regular_array_element_byte_size(xml_file, array_var)
+
+    # Returnresult = 1 用xml找到的数据类型大小偏移 0 则用自己定义的数据类型大小偏移
+    offset_address = array_var.calculate_offset_address(type_sizes,Returnresult) # 计算二维数组的偏移地址
     if offset_address is None:
         return None
-
-    address = array_var.base_address + array_var.offset_address
+    
+    address = array_var.base_address  + offset_address
     return address
 
 
+#######################################################################
+# @brief 函数名称：get_variable_address_struct_array_offset                    
+# @todo 代码实现的功能: 
+#                      找到数组在结构体的偏移地址 和 数组的类型idref
+#@param 参数：1.xml_file 
+#             2.变量名字
+#             3.struct_name 结构体名称
+#             4.member_name 结构体变量名称 
+#             5.               
+#@return 说明：int
+#@retval 1. 二级变量的偏移地址
+#        2. 数据类型
+####################################################################
 def get_variable_address_struct_array_offset(xml_file, base_address, struct_name, member_name, type_sizes):
-    array_name = member_name.split('[')[0]
 
+    array_name = member_name.split('[')[0]   #数组名称
+    #######################################################################
+    #  struct_type_idref  
+    #  通过结构体名称，找到该结构体的 DW_AT_type 类型                                
+    ####################################################################
     struct_type_idref = None
     for die in xml_file.iter('die'):
         name_attr = die.find(".//attribute[type='DW_AT_name']/value/string")
@@ -280,7 +345,14 @@ def get_variable_address_struct_array_offset(xml_file, base_address, struct_name
 
     if struct_type_idref is None:
         return None
-
+    
+    #######################################################################
+    #  array_type_idref  
+    #       通过结构体的 DW_AT_type 类型  查询到二级变量 member_name 结构体定义
+    #  1. 并保存二级变量的偏移地址  struct_offset 
+    #       从变量体里面找到二级变量die   从die中DW_AT_type 找到变量数据类型
+    #  2.找到变量的数据类型   array_type_idref                         
+    ####################################################################
     struct_offset = None
     array_type_idref = None
     for die in xml_file.iter('die'):
@@ -298,10 +370,17 @@ def get_variable_address_struct_array_offset(xml_file, base_address, struct_name
                             offset_value = offset_attr.text.split()[-1]
                             struct_offset = int(offset_value, 16)   # 转成16进制
 
-                        type_attr = member_die.find(".//attribute[type='DW_AT_type']/value/ref")#找到变量的数据类型
+                        type_attr = member_die.find(".//attribute[type='DW_AT_type']/value/ref") #  找到变量的数据类型
                         if type_attr is not None:
                             array_type_idref = type_attr.get("idref")
+                            break    
 
+    #######################################################################
+    #   若上面的方法找不到 array_type_idref
+    #   则通过   DW_AT_type_die_struct_type_idref  继续找
+    #   TODO：估计是某些数组会有嵌套的原因，具体忘记了                
+    ####################################################################
+                            
     if  array_type_idref is None:
         for die in xml_file.iter('die'):
             if die.get('id') == DW_AT_type_die_struct_type_idref:      # 根据结构体名称的ideref 找到对应的die
@@ -317,22 +396,44 @@ def get_variable_address_struct_array_offset(xml_file, base_address, struct_name
                             type_attr = member_die.find(".//attribute[type='DW_AT_type']/value/ref")#找到变量的数据类型
                             if type_attr is not None:
                                 array_type_idref = type_attr.get("idref")
+                                break 
                                    
     if struct_offset is None or array_type_idref is None:
         return None
     return struct_offset, array_type_idref
 
-# 找到数组类型的名字
+
+#######################################################################
+# @brief 函数名称：get_variable_type_regular_array1                  
+# @todo 代码实现的功能: 
+#               数组变量类型的名字 --  UINT16  UINT32                     
+####################################################################
 def get_variable_type_regular_array1(dwarf_info, array_var):
     for die in dwarf_info.iter('die'):
-        if die.get('id') == array_var.idref:
+        if die.get('id') == array_var.idref:    #
             array_var.typeidref = die.find(".//attribute[type='DW_AT_type']/value/ref")
             if array_var.typeidref is not None:
-                array_var.typeidref = array_var.typeidref.get('idref')
+                array_var.typeidref = array_var.typeidref.get('idref')       #遍历die 找到 idref  最后找到 数组类型的typeidref
 
+            #######################################################################
+            # array_var.byte_size = 数组字节大小                                    
+            ####################################################################
             byte_size_element = die.find(".//attribute[type='DW_AT_byte_size']/value/const")
             if byte_size_element is not None:
                 array_var.byte_size = byte_size_element.text
+            else:   #假如当前的数组类型找不到，就需要根据数组类型的idref重新轮训
+                for die in dwarf_info.iter('die'):
+                    if die.get('id') == array_var.typeidref:
+                        byte_size_element = die.find(".//attribute[type='DW_AT_byte_size']/value/const")
+                        if byte_size_element is not None:
+                            array_var.byte_size = byte_size_element.text
+                            break
+
+            #######################################################################
+            # array_var.array_size = 二维数组第二个数组大小  
+            # TODO：这里应该可以优化，attribute 中的die 对于二维数组来看，第一个die的 value/const 是第一维的大小，第二个是第二维的大小
+            #       想要实现三维数组的话，这里应该可以实现                               
+            ####################################################################                       
             A = 0
             for sub_die in die.findall('die'):
                 A = A+1 
@@ -342,6 +443,11 @@ def get_variable_type_regular_array1(dwarf_info, array_var):
                         if value is not None:
                             array_var.array_size = int(value.text, 16) + 1
                             array_var.array_size = hex(array_var.array_size)  # 拿到的数组大小要+1
+                            break
+
+            #######################################################################
+            # array_var.die_name = 找到数组的变量数据类型的名字                                  
+            #################################################################### 
 
             # 假设 dwarf_info 是你的 ElementTree.Element 对象，这里简化示例
             for section in dwarf_info.iter('section'):
@@ -356,36 +462,105 @@ def get_variable_type_regular_array1(dwarf_info, array_var):
                                     die_name = name.find("die_name")
                                     if die_name is not None:
                                         array_var.die_name = die_name.text
-                                        return array_var.die_name
+                                        return array_var.die_name   #找到数组的变量数据类型的名字
+                                    
+            typeidref_const = None
+            #######################################################################
+            # 跑到这里没找到变量数据类型的名字，那数组可能是常量Const数组  
+            # 需要通过 typeidref 找到   typeidref_const  里面的ref                                    
+            ####################################################################                  
+            for die in dwarf_info.iter('die'):
+                if die.get('id') == array_var.typeidref:
+                    typeidref_const = die.find(".//attribute[type='DW_AT_type']/value/ref")
+                    if typeidref_const is not None:
+                        typeidref_const = typeidref_const.get('idref')
+
+                        for die in dwarf_info.iter('die'):
+                            if die.get('id') == typeidref_const:
+                                DW_AT_type = die.find(".//attribute[type='DW_AT_type']/value/ref")        
+                                if DW_AT_type is not None:
+
+                                    # 找到最后的 idref 后，就开始查找变量名字
+                                    DW_AT_type = DW_AT_type.get('idref')   
+                                    for section in dwarf_info.iter('section'):
+                                        section_name = section.find('name')
+                                        if section_name is not None and section_name.text == ".debug_pubtypes":
+                                            # 遍历每一个 name_table
+                                            for name_table in section.iter('name_table'):
+                                                if name_table is not None:
+                                                    for name in name_table.iter('name'):
+                                                        ref = name.find("ref")
+                                                        if ref is not None and ref.get('idref') == DW_AT_type:
+                                                            die_name = name.find("die_name")
+                                                            if die_name is not None:
+                                                                array_var.die_name = die_name.text
+                                                                return array_var.die_name   #找到数组的变量数据类型的名字
+                                                           
+                        break
+                            
     return None
 
-
+#######################################################################
+# @brief 函数名称：get_variable_address_struct_array                  
+# @todo 代码实现的功能: 查询带数组，且是结构体下的变量地址
+#                      1.先通过结构体查找基地址
+#                      2.找到数组在结构体的偏移地址和 数组的类型idref    
+####################################################################
+DEBUGTemp1 = 0
+DEBUGTemp = 0
 def get_variable_address_struct_array(root, var_name, type_sizes):
     names = var_name.split('.')
-    #求出结构体名称的基地址
-    base_address = get_global_variable_address(root, names[0])
+    names_length = len(names)  # 获取列表长度
+    base_address = get_global_variable_address(root, names[0])  #求出结构体名称的基地址   
     if base_address is None:
         return None
 
-    # 找到数组在结构体的偏移地址和 数组的类型idref
-    struct_offset, array_type_idref = get_variable_address_struct_array_offset(root, base_address, names[0], names[1],
-                                                                               type_sizes)  # '0x8a:0x4bd31'
+    #######################################################################
+    # 找到数组在结构体的偏移地址和 数组的类型idref                            
+    ####################################################################  
+    if names_length <= 2: 
+        struct_offset, array_type_idref = get_variable_address_struct_array_offset(root, base_address, names[0], names[1],
+                                                                                type_sizes)  # '0x8a:0x4bd31'
+    elif names_length == 3:  # 结构体嵌套的情况，先找到2级变量的偏移地址
+        struct_offset_0 = None
+        for die in root.iter('die'):
+            name_attr = die.find(".//attribute[type='DW_AT_name']/value/string")
+            if name_attr is not None and name_attr.text == names[1]:                # 找到与变量名一样的name
+                base_attr = die.find(".//attribute[type='DW_AT_data_member_location']/value/block")
+                if base_attr is not None:
+                    value_element = base_attr.text.split()[-1]                         # 第二个参数就是变量地址
+                    if value_element is not None:
+                        struct_offset_0 =  int(value_element, 16)    
+
+        struct_offset_1, array_type_idref = get_variable_address_struct_array_offset(root, base_address, names[1], names[2],
+                                                                            type_sizes)  # '0x8a:0x4bd31' 
+        struct_offset  = struct_offset_0 + struct_offset_1
+
+
+    #######################################################################
+    # 通过   变量数据类型 计算出当前变量的 数组偏移地址                              
+    ####################################################################  
     array_var = ArrayVariable(var_name) #创建对象
     array_var.idref = array_type_idref
 
     die_name = get_variable_type_regular_array1(root, array_var) # 找到数组类型的名字：后面找不到数据类型大小，就用名字人为进行偏移
     if die_name is None:
         return None
-    A = get_variable_type_regular_array_element_byte_size(root, array_var) #通过xml文件查找数组数据类型大小
-    offset_address = array_var.calculate_offset_address(type_sizes,A) # 计算二维数组的偏移地址
-
+    Returnresult = get_variable_type_regular_array_element_byte_size(root, array_var) #通过xml文件查找数组数据类型大小
+    # Returnresult = 1 用xml找到的数据类型大小偏移 0 则用自己定义的数据类型大小偏移
+    
+    offset_address = array_var.calculate_offset_address(type_sizes,Returnresult) # 计算二维数组的偏移地址
     if offset_address is None:
         return None
 
     address = base_address + struct_offset + offset_address
     return address
 
-
+#######################################################################
+# @brief 函数名称：get_variable_address_array                    
+# @todo 代码实现的功能: 查询带数组的变量地址
+#                      区分名字是否存在结构体
+####################################################################
 def get_variable_address_array(root, var_name, type_sizes):
     if '.' in var_name:
         # Process array within a structure
@@ -395,9 +570,15 @@ def get_variable_address_array(root, var_name, type_sizes):
         return get_variable_address_regular_array(root, var_name, type_sizes)
 
 
+#######################################################################
+# @brief 函数名称：get_variable_address                    
+# @todo 代码实现的功能: 查询地址函数总入口 
+#                      区分变量名是否带数组标识
+#TODO：总入口
+####################################################################
 def get_variable_address(root, var_name, type_sizes):
     if '[' in var_name:
-        return get_variable_address_array(root, var_name, type_sizes)
+        return get_variable_address_array(root, var_name, type_sizes)   #查询带数组的变量地址
     elif '.' in var_name:
         return get_variable_address_recursive(root, var_name)
     else:
@@ -477,17 +658,21 @@ def load_type_sizes(self):
     type_sizes = default_type_sizes.copy()
     variables = default_variables.copy()
     common_variables = {}  # 存储常用变量
+    Control_variables = {}  # 存储控制变量
 
     start_marker = "# 数据类型_开始行"
     end_marker = "# 数据类型_结束行"
     var_start_marker = "# 常用变量_开始行"
     var_end_marker = "# 常用变量_结束行"
+    Controlvar_start_marker = "# 控制变量_开始行"
+    Controlvar_end_marker = "# 控制变量_结束行"
     prefix_start_marker = "# 变量前缀_开始行"
     prefix_end_marker = "# 变量前缀_结束行"
 
     reading_sizes = False
     reading_vars = False
     reading_prefixes = False
+    reading_Controlvars = False
 
     # 获取当前脚本或EXE的目录
     if getattr(sys, 'frozen', False):
@@ -525,7 +710,13 @@ def load_type_sizes(self):
                 elif line == prefix_end_marker:
                     reading_prefixes = False
                     continue
-                
+                elif line == Controlvar_start_marker:
+                    reading_Controlvars = True
+                    continue
+                elif line == Controlvar_end_marker:
+                    reading_Controlvars = False
+                    continue  
+
                 if reading_sizes:
                     parts = line.split('=')
                     if len(parts) == 2:
@@ -539,7 +730,13 @@ def load_type_sizes(self):
                     if len(parts) == 2:
                         cn_name, var_name = parts
                         common_variables[cn_name.strip()] = var_name.strip()
-                
+
+                if reading_Controlvars:
+                    parts = line.split(':')
+                    if len(parts) == 2:
+                        Control_cn_name, Control_var_name = parts
+                        Control_variables[Control_cn_name.strip()] = Control_var_name.strip()
+
                 if reading_prefixes:
                     file_variables.append(line)
 
@@ -552,7 +749,7 @@ def load_type_sizes(self):
     except Exception as e:
         print(f"加载type_sizes.txt时发生错误: {e}")
         #QMessageBox.warning(self, "警告", "加载type_sizes.txt时发生错误")
-    return type_sizes, variables, common_variables  # 增加返回 common_variables
+    return type_sizes, variables, common_variables,Control_variables  # 增加返回 common_variables
 
 
 
@@ -589,9 +786,9 @@ def parse_dwarf_xml(xml_file):
 class AddressFinder(QWidget):
     def __init__(self):
         super().__init__()
-        self.type_sizes, self.variables, self.common_variables = load_type_sizes(self)  # 获取常用变量
+        self.type_sizes, self.variables, self.common_variables, self.Control_variables = load_type_sizes(self)  # 获取常用变量
         self.initUI()
-        self.previous_variables = [""] * 15
+        self.previous_variables = [""] * RANGE_define
 
     def initUI(self):
         self.setWindowTitle("OUT文件取址工具")
@@ -603,7 +800,7 @@ class AddressFinder(QWidget):
         top_layout = QHBoxLayout()  # 创建一个水平布局管理器（QHBoxLayout），用于将窗口部件按照水平方向排列。
 
         info_layout = QVBoxLayout()  # 再次创建一个垂直布局管理器，用于在顶部信息布局下方添加额外的信息部件。
-        self.company_version_label = QLabel("公司: Sineng  版本: 1.0.5 ")
+        self.company_version_label = QLabel("公司: Sineng  版本: 1.0.8 ")
         self.TODO_label = QLabel("TODO: 不支持二维数组以上的搜索;  局部刷新只会更新名称有变化的变量;")
         self.TODO_label1 = QLabel("系数   U16变量:0    电流:336     电网电压:690   母线电压:1200")
         info_layout.addWidget(self.company_version_label)
@@ -664,18 +861,19 @@ class AddressFinder(QWidget):
         xml_update_layout.addWidget(self.xml_update_output)
         layout.addLayout(xml_update_layout)
 
+        
         # Variable names input
-        self.var_labels = [QLabel(f"变量名称{i + 1}:") for i in range(15)]
-        self.var_inputs = [QLineEdit() for _ in range(15)]
-        self.addr_labels = [QLabel(f"MAP地址{i + 1}:") for i in range(15)]
-        self.addr_outputs = [QLineEdit() for _ in range(15)]
-        self.sn_addr_labels = [QLabel(f"上能地址{i + 1}:") for i in range(15)]
-        self.sn_addr_outputs = [QLineEdit() for _ in range(15)]
+        self.var_labels = [QLabel(f"变量名称{i + 1}:") for i in range(RANGE_define)]#self.var_labels = [QLabel(f"变量名称{i + 1}:") for i in range(RANGE_define)]
+        self.var_inputs = [QLineEdit() for _ in range(RANGE_define)]
+        self.addr_labels = [QLabel(f"MAP地址:") for i in range(RANGE_define)]
+        self.addr_outputs = [QLineEdit() for _ in range(RANGE_define)]
+        self.sn_addr_labels = [QLabel(f"软件示波器地址:") for i in range(RANGE_define)]
+        self.sn_addr_outputs = [QLineEdit() for _ in range(RANGE_define)]
 
         completer = QCompleter(self.variables)
         completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         
-        for i in range(15):
+        for i in range(RANGE_define):
             var_layout = QHBoxLayout()
             self.var_inputs[i].setFixedWidth(400)  # Decrease variable input width
             self.var_inputs[i].setCompleter(completer)
@@ -689,17 +887,29 @@ class AddressFinder(QWidget):
             self.addr_outputs[i].setFixedWidth(100)
             self.sn_addr_outputs[i].setFixedWidth(100)
 
-            var_layout.addWidget(self.var_labels[i])
-            var_layout.addWidget(self.var_inputs[i])
-            var_layout.addWidget(select_prefix_button)
-            var_layout.addWidget(select_common_var_button)
-            var_layout.addWidget(self.addr_labels[i])
-            var_layout.addWidget(self.addr_outputs[i])
-            var_layout.addWidget(self.sn_addr_labels[i])
-            var_layout.addWidget(self.sn_addr_outputs[i])
+            #   列布局
+            var_layout.addWidget(select_common_var_button)  # 常用变量
+            var_layout.addWidget(select_prefix_button)      # 变量前缀
+            var_layout.addWidget(self.var_labels[i])        # 变量名称
+            var_layout.addWidget(self.var_inputs[i])        # 变量框
+            var_layout.addWidget(self.sn_addr_labels[i])    # 示波器地址
+            var_layout.addWidget(self.sn_addr_outputs[i])   # 示波器地址框
+            var_layout.addWidget(self.addr_labels[i])       # MAP地址
+            var_layout.addWidget(self.addr_outputs[i])      # MAP地址框
+
             self.addr_outputs[i].setReadOnly(True)
             self.sn_addr_outputs[i].setReadOnly(True)
             layout.addLayout(var_layout)
+
+                # 每4行添加分隔线（注意：i从0开始，所以判断 (i+1) % 4 == 0）
+            if (i + 1) % 4 == 0 and i != RANGE_define - 1:  # 最后一行不添加
+                var_layout = QHBoxLayout()
+                line = QFrame()
+                line.setFrameShape(QFrame.Shape.HLine)  # 使用 Shape 枚举类
+                line.setFrameShadow(QFrame.Shadow.Sunken)  # 使用 Shadow 枚举类
+                line.setLineWidth(1)
+                var_layout.addWidget(line)
+                layout.addLayout(var_layout)
 
         self.setLayout(layout)
 
@@ -736,6 +946,11 @@ class AddressFinder(QWidget):
         dialog.setLayout(layout)
         dialog.exec()
 
+#######################################################################
+# @brief 函数名称：show_common_variable_dialog                    
+# @todo 代码实现的功能: 
+#                      常用变量按钮的QT界面实现
+####################################################################
     def show_common_variable_dialog(self, idx):
         dialog = QDialog(self)
         dialog.setWindowTitle("选择常用变量")
@@ -777,11 +992,12 @@ class AddressFinder(QWidget):
             self.out_input.setText(path)
 
     def refresh_addresses(self):
+        self.refresh_xml_file()
         dwarf_info = parse_dwarf_xml(self.xml_file)
         if dwarf_info is None:
             QMessageBox.warning(self, "错误", "解析XML文件失败")
             return
-        for i in range(15):
+        for i in range(RANGE_define):
             var_name = self.var_inputs[i].text().strip()
             if var_name:
                 address = get_variable_address(dwarf_info, var_name, self.type_sizes)
@@ -801,7 +1017,7 @@ class AddressFinder(QWidget):
         if dwarf_info is None:
             QMessageBox.warning(self, "错误", "解析XML文件失败")
             return
-        for i in range(15):
+        for i in range(RANGE_define):
             var_name = self.var_inputs[i].text().strip()
             if var_name != self.previous_variables[i]:
                 address = get_variable_address(dwarf_info, var_name, self.type_sizes)
