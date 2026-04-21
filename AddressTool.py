@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QMessageBox, QCompleter, QListWidget, QListWidgetItem, QDialog, QDialogButtonBox, QFrame,
     QScrollArea, QSizePolicy, QGridLayout
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QFileSystemWatcher, QTimer
 
 RANGE_define = 20  # 定义变量数
 
@@ -1062,9 +1062,16 @@ class AddressFinder(QWidget):
 
         self.setLayout(layout)
 
+        # 文件监控：监视 OUT 文件变化以自动刷新
+        self.file_watcher = QFileSystemWatcher(self)
+        self.file_watcher.fileChanged.connect(self.on_out_file_changed)
+
         # Automatically find ofd6x tool and out file if possible
         A = self.auto_find_tools()
-        if(A != None):
+        if A is not None:
+            out_path = self.out_input.text().strip()
+            if out_path:
+                self.start_watch_out_file(out_path)
             self.refresh_xml_file()
 
     def show_variable_dialog(self, idx):
@@ -1159,6 +1166,54 @@ class AddressFinder(QWidget):
         completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self._create_variable_row(completer)
 
+    def start_watch_out_file(self, path: str):
+        """开始监控指定的 OUT 文件路径（仅当文件存在时）"""
+        if not path:
+            return
+        # 移除之前的监听
+        try:
+            existing = self.file_watcher.files()
+            if existing:
+                self.file_watcher.removePaths(existing)
+        except Exception:
+            pass
+
+        # 添加新的监听
+        try:
+            if os.path.exists(path):
+                self.file_watcher.addPath(path)
+        except Exception:
+            pass
+
+    def on_out_file_changed(self, path: str):
+        """文件变化回调：延迟处理以等待写入完成，然后刷新 XML 与地址"""
+        # 延迟 600ms 再处理，避免文件写入未完成
+        QTimer.singleShot(600, lambda: self._handle_out_file_change(path))
+
+    def _handle_out_file_change(self, path: str):
+        # 如果文件不存在，直接返回；否则尝试刷新 xml 并更新地址
+        if not path or not os.path.exists(path):
+            # 有时替换文件会导致 watcher 需要重新添加，尝试重新添加
+            try:
+                if path:
+                    self.file_watcher.addPath(path)
+            except Exception:
+                pass
+            return
+
+        # 重新调用刷新逻辑
+        try:
+            self.refresh_xml_file()
+            # 小延迟后刷新地址，确保 xml 已生成
+            QTimer.singleShot(300, self.refresh_addresses)
+        finally:
+            # 确保 watcher 继续监听该文件（某些平台 fileChanged 只触发一次）
+            try:
+                if path not in self.file_watcher.files():
+                    self.file_watcher.addPath(path)
+            except Exception:
+                pass
+
 #######################################################################
 # @brief 函数名称：show_common_variable_dialog                    
 # @todo 代码实现的功能: 
@@ -1203,6 +1258,11 @@ class AddressFinder(QWidget):
         path, _ = QFileDialog.getOpenFileName(self, "选择OUT文件路径")
         if path:
             self.out_input.setText(path)
+            # 开始监控所选 out 文件
+            try:
+                self.start_watch_out_file(path)
+            except Exception:
+                pass
 
     def Var_refres(self):
         loop_count = min(len(self.Memory_variables), len(self.var_inputs))
@@ -1297,6 +1357,11 @@ class AddressFinder(QWidget):
             # 假设我们选择第一个找到的 .out 文件
             out_file_path = os.path.join(current_directory, out_files[0])
             self.out_input.setText(out_file_path)
+            # 开始监控自动发现的 out 文件
+            try:
+                self.start_watch_out_file(out_file_path)
+            except Exception:
+                pass
         else:
             #QMessageBox.warning(self, "警告", "当前路径下未找到任何 OUT 文件")
             return None
@@ -1310,7 +1375,7 @@ if __name__ == '__main__':
     else:
          # 运行在开发环境中
         current_dir = os.path.dirname(os.path.abspath(__file__))
-    logging.debug('debug级别，一般用来打印一些调试信息，级别最低')    
+    # logging.debug('debug级别，一般用来打印一些调试信息，级别最低')    
     os.chdir(current_dir)
     app = QApplication(sys.argv)
     ex = AddressFinder()
