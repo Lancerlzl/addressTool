@@ -13,7 +13,8 @@ import time
 import subprocess
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QFileDialog, 
-    QMessageBox, QCompleter, QListWidget, QListWidgetItem, QDialog, QDialogButtonBox, QFrame
+    QMessageBox, QCompleter, QListWidget, QListWidgetItem, QDialog, QDialogButtonBox, QFrame,
+    QScrollArea, QSizePolicy, QGridLayout
 )
 from PyQt6.QtCore import Qt
 
@@ -947,7 +948,8 @@ class AddressFinder(QWidget):
 
     def initUI(self):
         self.setWindowTitle("OUT文件取址工具")
-        self.setGeometry(100, 100, 1000, 600)
+        self.setGeometry(100, 100, 1400, 900)
+        self.setMinimumSize(1200, 800)
 
         layout = QVBoxLayout()  # 创建一个垂直布局管理器（QVBoxLayout），用于将窗口部件按照垂直方向排列。
 
@@ -1022,54 +1024,41 @@ class AddressFinder(QWidget):
         layout.addLayout(xml_update_layout)
 
         
-        # Variable names input
-        self.var_labels = [QLabel(f"变量名称{i + 1}:") for i in range(RANGE_define)]#self.var_labels = [QLabel(f"变量名称{i + 1}:") for i in range(RANGE_define)]
-        self.var_inputs = [QLineEdit() for _ in range(RANGE_define)]
-        self.addr_labels = [QLabel(f"MAP地址:") for i in range(RANGE_define)]
-        self.addr_outputs = [QLineEdit() for _ in range(RANGE_define)]
-        self.sn_addr_labels = [QLabel(f"软件示波器地址:") for i in range(RANGE_define)]
-        self.sn_addr_outputs = [QLineEdit() for _ in range(RANGE_define)]
+        # Variable names input (move to a scrollable area, use grid layout for compactness)
+        # Variable names input (默认 20 行，可追加更多)
+        self.var_labels = []
+        self.var_inputs = []
+        self.addr_labels = []
+        self.addr_outputs = []
+        self.sn_addr_labels = []
+        self.sn_addr_outputs = []
 
         completer = QCompleter(self.variables)
         completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        
+
+        # 添加变量按钮（用于超出20行时追加）
+        self.add_var_button = QPushButton("添加变量")
+        self.add_var_button.clicked.connect(self.add_variable_row)
+        top_layout.addWidget(self.add_var_button)
+
+        # container widget for entries
+        entries_widget = QWidget()
+        self.entries_layout = QVBoxLayout(entries_widget)
+        self.entries_layout.setSpacing(6)
+        self.entries_layout.setContentsMargins(6, 6, 6, 6)
+
+        # create initial RANGE_define rows
         for i in range(RANGE_define):
-            var_layout = QHBoxLayout()
-            self.var_inputs[i].setFixedWidth(400)  # Decrease variable input width
-            self.var_inputs[i].setCompleter(completer)
-            
-            select_prefix_button = QPushButton("变量前缀")
-            select_prefix_button.clicked.connect(lambda _, idx=i: self.show_variable_dialog(idx))
+            self._create_variable_row(completer)
 
-            select_common_var_button = QPushButton("常用变量")
-            select_common_var_button.clicked.connect(lambda _, idx=i: self.show_common_variable_dialog(idx))
+        # make it scrollable
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(entries_widget)
+        scroll.setMinimumHeight(300)
+        scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
-            self.addr_outputs[i].setFixedWidth(100)
-            self.sn_addr_outputs[i].setFixedWidth(100)
-
-            #   列布局
-            var_layout.addWidget(select_common_var_button)  # 常用变量
-            var_layout.addWidget(select_prefix_button)      # 变量前缀
-            var_layout.addWidget(self.var_labels[i])        # 变量名称
-            var_layout.addWidget(self.var_inputs[i])        # 变量框
-            var_layout.addWidget(self.sn_addr_labels[i])    # 示波器地址
-            var_layout.addWidget(self.sn_addr_outputs[i])   # 示波器地址框
-            var_layout.addWidget(self.addr_labels[i])       # MAP地址
-            var_layout.addWidget(self.addr_outputs[i])      # MAP地址框
-
-            self.addr_outputs[i].setReadOnly(True)
-            self.sn_addr_outputs[i].setReadOnly(True)
-            layout.addLayout(var_layout)
-
-                # 每4行添加分隔线（注意：i从0开始，所以判断 (i+1) % 4 == 0）
-            if (i + 1) % 4 == 0 and i != RANGE_define - 1:  # 最后一行不添加
-                var_layout = QHBoxLayout()
-                line = QFrame()
-                line.setFrameShape(QFrame.Shape.HLine)  # 使用 Shape 枚举类
-                line.setFrameShadow(QFrame.Shadow.Sunken)  # 使用 Shadow 枚举类
-                line.setLineWidth(1)
-                var_layout.addWidget(line)
-                layout.addLayout(var_layout)
+        layout.addWidget(scroll)
 
         self.setLayout(layout)
 
@@ -1107,6 +1096,68 @@ class AddressFinder(QWidget):
 
         dialog.setLayout(layout)
         dialog.exec()
+
+    def _create_variable_row(self, completer):
+        idx = len(self.var_inputs)
+
+        # create widgets
+        label = QLabel(f"变量名称{idx + 1}:")
+        var_input = QLineEdit()
+        var_input.setCompleter(completer)
+        var_input.setMinimumWidth(360)
+
+        select_prefix_button = QPushButton("变量前缀")
+        select_prefix_button.clicked.connect(lambda _, i=idx: self.show_variable_dialog(i))
+        select_common_var_button = QPushButton("常用变量")
+        select_common_var_button.clicked.connect(lambda _, i=idx: self.show_common_variable_dialog(i))
+
+        sn_label = QLabel("软件示波器地址:")
+        sn_output = QLineEdit()
+        sn_output.setReadOnly(True)
+        sn_output.setMinimumWidth(120)
+
+        addr_label = QLabel("MAP地址:")
+        addr_output = QLineEdit()
+        addr_output.setReadOnly(True)
+        addr_output.setMinimumWidth(120)
+
+        # append to lists
+        self.var_labels.append(label)
+        self.var_inputs.append(var_input)
+        self.sn_addr_labels.append(sn_label)
+        self.sn_addr_outputs.append(sn_output)
+        self.addr_labels.append(addr_label)
+        self.addr_outputs.append(addr_output)
+
+        # layout for this row (keep original horizontal spacing)
+        row_layout = QHBoxLayout()
+        row_layout.addWidget(select_common_var_button)
+        row_layout.addWidget(select_prefix_button)
+        row_layout.addWidget(label)
+        row_layout.addWidget(var_input)
+        row_layout.addWidget(sn_label)
+        row_layout.addWidget(sn_output)
+        row_layout.addWidget(addr_label)
+        row_layout.addWidget(addr_output)
+
+        self.entries_layout.addLayout(row_layout)
+
+        # add separator after every 4 rows
+        if (idx + 1) % 4 == 0:
+            sep = QFrame()
+            sep.setFrameShape(QFrame.Shape.HLine)
+            sep.setFrameShadow(QFrame.Shadow.Sunken)
+            sep.setLineWidth(1)
+            self.entries_layout.addWidget(sep)
+
+        # update previous_variables length
+        self.previous_variables = [""] * len(self.var_inputs)
+
+    def add_variable_row(self):
+        # allow adding unlimited rows
+        completer = QCompleter(self.variables)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self._create_variable_row(completer)
 
 #######################################################################
 # @brief 函数名称：show_common_variable_dialog                    
@@ -1154,7 +1205,7 @@ class AddressFinder(QWidget):
             self.out_input.setText(path)
 
     def Var_refres(self):
-        loop_count = min(len(self.Memory_variables), 20)
+        loop_count = min(len(self.Memory_variables), len(self.var_inputs))
         for idx in range(loop_count):
             self.var_inputs[idx].setText(self.Memory_variables[idx])
 
@@ -1165,7 +1216,7 @@ class AddressFinder(QWidget):
         if dwarf_info is None:
             QMessageBox.warning(self, "错误", "解析XML文件失败")
             return
-        for i in range(RANGE_define):
+        for i in range(len(self.var_inputs)):
             var_name = self.var_inputs[i].text().strip()
             if var_name:
                 address = get_variable_address(dwarf_info, var_name, self.type_sizes)
@@ -1193,7 +1244,7 @@ class AddressFinder(QWidget):
         current_directory = os.path.abspath(os.getcwd())    
         txt_file_path = os.path.join(current_directory, 'type_sizes.txt')
 
-        for i in range(RANGE_define):
+        for i in range(len(self.var_inputs)):
             var_name = self.var_inputs[i].text().strip()
             if var_name != self.previous_variables[i]:
                 address = get_variable_address(dwarf_info, var_name, self.type_sizes)
