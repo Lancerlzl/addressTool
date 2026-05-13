@@ -796,8 +796,11 @@ def convert_out_to_xml(ofd6x_path, out_file):
 
 def parse_dwarf_xml(xml_file):
     try:
-        tree = ET.parse(xml_file)
-        root = tree.getroot()
+        # 修复：先读取文件内容（支持中文路径），再解析XML
+        with open(xml_file, 'r', encoding='utf-8', errors='replace') as f:
+            xml_content = f.read()
+        # 手动解析内容，避免ET.parse对中文路径的兼容问题
+        root = ET.fromstring(xml_content)
         return root
     except ET.ParseError as e:
         print(f"解析XML文件时发生错误: {e}")
