@@ -12,13 +12,202 @@ import os
 import time
 import subprocess
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QFileDialog, 
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QFileDialog,
     QMessageBox, QCompleter, QListWidget, QListWidgetItem, QDialog, QDialogButtonBox, QFrame,
-    QScrollArea, QSizePolicy, QGridLayout
+    QScrollArea, QSizePolicy, QGridLayout, QTextEdit
 )
 from PyQt6.QtCore import Qt, QFileSystemWatcher, QTimer
 
 RANGE_define = 20  # 定义变量数
+
+# Apple 风格 QSS 样式表（纯样式，不改变任何布局与功能）
+APPLE_QSS = """
+/* ===== 全局背景 + 字体 ===== */
+QWidget {
+    background-color: #F0F0F5;
+    color: #1D1D1F;
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+    font-size: 13px;
+}
+
+/* ===== 按钮统一风格 ===== */
+QPushButton {
+    background-color: #F2F2F7;
+    color: #1D1D1F;
+    border: 1px solid #E0E0E5;
+    border-radius: 8px;
+    padding: 7px 16px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+QPushButton:hover {
+    background-color: #E5E5EA;
+    border: 1px solid #C7C7CC;
+}
+
+QPushButton:pressed {
+    background-color: #D1D1D6;
+}
+
+/* 主要按钮（刷新） — 蓝色实心 */
+QPushButton#refreshBtn {
+    background-color: #007AFF;
+    color: #FFFFFF;
+    border: none;
+    font-weight: 600;
+}
+
+QPushButton#refreshBtn:hover {
+    background-color: #0066D6;
+}
+
+QPushButton#refreshBtn:pressed {
+    background-color: #0055B3;
+}
+
+/* 局部刷新按钮 — 绿色 */
+QPushButton#partialRefreshBtn {
+    background-color: #34C759;
+    color: #FFFFFF;
+    border: none;
+    font-weight: 600;
+}
+
+QPushButton#partialRefreshBtn:hover {
+    background-color: #2DB84D;
+}
+
+QPushButton#partialRefreshBtn:pressed {
+    background-color: #28A745;
+}
+
+/* 一键清除按钮 — 红色 */
+QPushButton#clearAllBtn {
+    background-color: #FF3B30;
+    color: #FFFFFF;
+    border: none;
+    font-weight: 600;
+}
+
+QPushButton#clearAllBtn:hover {
+    background-color: #E0352B;
+}
+
+QPushButton#clearAllBtn:pressed {
+    background-color: #C02E25;
+}
+
+/* ===== 输入框 ===== */
+QLineEdit {
+    background-color: #FFFFFF;
+    border: 1.5px solid #D1D1D6;
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 13px;
+    color: #1D1D1F;
+    selection-background-color: #007AFF;
+    selection-color: #FFFFFF;
+}
+
+QLineEdit:focus {
+    border: 1.5px solid #007AFF;
+    background-color: #FAFAFF;
+}
+
+QLineEdit[readOnly="true"] {
+    background-color: #F5F5F8;
+    color: #6D6D72;
+    border: 1.5px solid #E8E8ED;
+}
+
+/* ===== 滚动区域 ===== */
+QScrollArea {
+    background-color: #FFFFFF;
+    border: 1px solid #E5E5EA;
+    border-radius: 10px;
+}
+
+QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    margin: 0px;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #C8C8CE;
+    border-radius: 4px;
+    min-height: 30px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #AEAEB2;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+    background: none;
+}
+
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none;
+}
+
+/* ===== 对话框 ===== */
+QDialog {
+    background-color: #F0F0F5;
+}
+
+QDialog QListWidget {
+    background-color: #FFFFFF;
+    border: 1px solid #E5E5EA;
+    border-radius: 8px;
+    padding: 4px;
+    font-size: 13px;
+    outline: none;
+}
+
+QDialog QListWidget::item {
+    padding: 8px 12px;
+    border-radius: 4px;
+}
+
+QDialog QListWidget::item:selected {
+    background-color: #007AFF;
+    color: #FFFFFF;
+}
+
+QDialog QListWidget::item:hover:!selected {
+    background-color: #F2F2F7;
+}
+
+QDialog QPushButton {
+    background-color: #F2F2F7;
+    color: #1D1D1F;
+    border: 1px solid #E5E5EA;
+    border-radius: 6px;
+    padding: 7px 18px;
+}
+
+QDialog QPushButton:hover {
+    background-color: #E5E5EA;
+}
+
+/* ===== 分隔线 ===== */
+QFrame#rowSeparator {
+    color: #E0E0E5;
+}
+
+/* ===== 提示框 ===== */
+QToolTip {
+    background-color: #1D1D1F;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+}
+"""
 
 import logging
 
@@ -946,21 +1135,80 @@ class AddressFinder(QWidget):
     def __init__(self):
         super().__init__()
         self.type_sizes, self.variables, self.common_variables, self.Control_variables , self.Memory_variables = load_type_sizes(self)  # 获取常用变量
+        self.xml_file = None
+        self.setStyleSheet(APPLE_QSS)
         self.initUI()
         self.previous_variables = [""] * RANGE_define
 
     def initUI(self):
         self.setWindowTitle("OUT文件取址工具")
-        self.setGeometry(100, 100, 1400, 900)
-        self.setMinimumSize(1200, 800)
+        self.setGeometry(100, 100, 1700, 920)
+        self.setMinimumSize(1450, 800)
 
-        layout = QVBoxLayout()  # 创建一个垂直布局管理器（QVBoxLayout），用于将窗口部件按照垂直方向排列。
+        # ===== 顶级水平布局：左侧日志 + 右侧主界面 =====
+        outer_layout = QHBoxLayout()
+        outer_layout.setContentsMargins(12, 14, 12, 14)
+        outer_layout.setSpacing(12)
+
+        # ========== 左侧日志面板 ==========
+        log_panel = QVBoxLayout()
+        log_panel.setSpacing(8)
+
+        log_title_layout = QHBoxLayout()
+        log_title = QLabel("操作日志")
+        log_title.setStyleSheet("font-size: 15px; font-weight: 600; color: #1D1D1F; background: transparent;")
+        log_title_layout.addWidget(log_title)
+        log_title_layout.addStretch()
+        self.clear_log_button = QPushButton("清空")
+        self.clear_log_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.clear_log_button.clicked.connect(self.clear_log)
+        self.clear_log_button.setStyleSheet("""
+            QPushButton {
+                background-color: #F2F2F7; color: #8E8E93; border: 1px solid #E5E5EA;
+                border-radius: 6px; padding: 4px 12px; font-size: 12px;
+            }
+            QPushButton:hover { background-color: #E5E5EA; }
+        """)
+        log_title_layout.addWidget(self.clear_log_button)
+        log_panel.addLayout(log_title_layout)
+
+        self.log_output = QTextEdit()
+        self.log_output.setReadOnly(True)
+        self.log_output.setMinimumWidth(300)
+        self.log_output.setMaximumWidth(340)
+        self.log_output.setStyleSheet("""
+            QTextEdit {
+                background-color: #FAFAFC;
+                border: 1px solid #E8E8ED;
+                border-radius: 10px;
+                padding: 10px 14px;
+                font-family: "Cascadia Code", "Consolas", "Microsoft YaHei", monospace;
+                font-size: 12px;
+                color: #1D1D1F;
+                selection-background-color: #007AFF;
+                selection-color: #FFFFFF;
+            }
+            QScrollBar:vertical {
+                width: 6px; background: transparent;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #C8C8CE; border-radius: 3px; min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover { background-color: #AEAEB2; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
+        """)
+        log_panel.addWidget(self.log_output, 1)
+        outer_layout.addLayout(log_panel)
+
+        # ========== 右侧主界面（原有全部内容） ==========
+        layout = QVBoxLayout()
+        layout.setSpacing(8)
 
         # Top info layout with author, version, and refresh button
-        top_layout = QHBoxLayout()  # 创建一个水平布局管理器（QHBoxLayout），用于将窗口部件按照水平方向排列。
+        top_layout = QHBoxLayout()
 
-        info_layout = QVBoxLayout()  # 再次创建一个垂直布局管理器，用于在顶部信息布局下方添加额外的信息部件。
-        self.company_version_label = QLabel("公司: Sineng  版本: 1.1.0 ")
+        info_layout = QVBoxLayout()
+        self.company_version_label = QLabel("公司: Sineng  版本: V20260523 ")
         self.TODO_label = QLabel("TODO: 不支持二维数组以上的搜索;  局部刷新只会更新名称有变化的变量;")
         self.TODO_label1 = QLabel("系数   U16变量:0    电流:336     电网电压:690   母线电压:1200")
         info_layout.addWidget(self.company_version_label)
@@ -968,24 +1216,32 @@ class AddressFinder(QWidget):
         info_layout.addWidget(self.TODO_label1)
 
         self.Var_refres_button = QPushButton("变量记录")
-        self.Var_refres_button.clicked.connect(self.Var_refres)  # 刷新函数
-        self.Var_refres_button.setFixedSize(80, 80)
+        self.Var_refres_button.clicked.connect(self.Var_refres)
+        self.Var_refres_button.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        self.clear_all_button = QPushButton("一键清除变量")
+        self.clear_all_button.setObjectName("clearAllBtn")
+        self.clear_all_button.clicked.connect(self.clear_all_variables)
+        self.clear_all_button.setCursor(Qt.CursorShape.PointingHandCursor)
 
         self.refresh_button = QPushButton("刷新")
-        self.refresh_button.clicked.connect(self.refresh_addresses)  # 刷新函数
-        self.refresh_button.setFixedSize(80, 80)
+        self.refresh_button.setObjectName("refreshBtn")
+        self.refresh_button.clicked.connect(self.refresh_addresses)
+        self.refresh_button.setCursor(Qt.CursorShape.PointingHandCursor)
 
         self.partial_refresh_button = QPushButton("局部刷新")
+        self.partial_refresh_button.setObjectName("partialRefreshBtn")
         self.partial_refresh_button.clicked.connect(self.partial_refresh_addresses)
-        self.partial_refresh_button.setFixedSize(80, 80)
-        
+        self.partial_refresh_button.setCursor(Qt.CursorShape.PointingHandCursor)
+
         self.refresh_xml_button = QPushButton("刷新XML文件")
         self.refresh_xml_button.clicked.connect(self.refresh_xml_file)
-        self.refresh_xml_button.setFixedSize(120, 80)
+        self.refresh_xml_button.setCursor(Qt.CursorShape.PointingHandCursor)
 
         top_layout.addLayout(info_layout)
         top_layout.addStretch(1)
         top_layout.addWidget(self.Var_refres_button)
+        top_layout.addWidget(self.clear_all_button)
         top_layout.addWidget(self.refresh_button)
         top_layout.addWidget(self.partial_refresh_button)
         top_layout.addWidget(self.refresh_xml_button)
@@ -996,9 +1252,12 @@ class AddressFinder(QWidget):
         ofd6x_layout = QHBoxLayout()
         self.default_path_button = QPushButton("默认路径")
         self.default_path_button.clicked.connect(self.set_default_ofd6x_path)
+        self.default_path_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.ofd6x_label = QLabel("ofd6x工具路径:")
         self.ofd6x_input = QLineEdit()
+        self.ofd6x_input.setPlaceholderText("选择或输入 ofd6x.exe 的路径...")
         self.ofd6x_browse = QPushButton("浏览")
+        self.ofd6x_browse.setCursor(Qt.CursorShape.PointingHandCursor)
         self.ofd6x_browse.clicked.connect(self.browse_ofd6x)
         ofd6x_layout.addWidget(self.default_path_button)
         ofd6x_layout.addWidget(self.ofd6x_label)
@@ -1010,7 +1269,9 @@ class AddressFinder(QWidget):
         out_layout = QHBoxLayout()
         self.out_label = QLabel("OUT文件路径:")
         self.out_input = QLineEdit()
+        self.out_input.setPlaceholderText("选择编译生成的 .out 文件...")
         self.out_browse = QPushButton("浏览")
+        self.out_browse.setCursor(Qt.CursorShape.PointingHandCursor)
         self.out_browse.clicked.connect(self.browse_out)
         out_layout.addWidget(self.out_label)
         out_layout.addWidget(self.out_input)
@@ -1021,6 +1282,7 @@ class AddressFinder(QWidget):
         self.xml_update_label = QLabel("XML更新信息:")
         self.xml_update_output = QLineEdit()
         self.xml_update_output.setReadOnly(True)
+        self.xml_update_output.setPlaceholderText("等待刷新...")
         xml_update_layout = QHBoxLayout()
         xml_update_layout.addWidget(self.xml_update_label)
         xml_update_layout.addWidget(self.xml_update_output)
@@ -1042,6 +1304,7 @@ class AddressFinder(QWidget):
         # 添加变量按钮（用于超出20行时追加）
         self.add_var_button = QPushButton("添加变量")
         self.add_var_button.clicked.connect(self.add_variable_row)
+        self.add_var_button.setCursor(Qt.CursorShape.PointingHandCursor)
         top_layout.addWidget(self.add_var_button)
 
         # container widget for entries
@@ -1063,7 +1326,11 @@ class AddressFinder(QWidget):
 
         layout.addWidget(scroll)
 
-        self.setLayout(layout)
+        outer_layout.addLayout(layout, 1)
+        self.setLayout(outer_layout)
+
+        # 启动日志
+        self.log("工具启动", "就绪 — 等待操作")
 
         # 文件监控：监视 OUT 文件变化以自动刷新
         self.file_watcher = QFileSystemWatcher(self)
@@ -1076,6 +1343,37 @@ class AddressFinder(QWidget):
             if out_path:
                 self.start_watch_out_file(out_path)
             self.refresh_xml_file()
+
+    # ===== 日志方法 =====
+    def log(self, tag, msg, level="info"):
+        """向左侧日志面板追加一条带时间戳的日志。
+
+        level: 'info' (蓝) | 'success' (绿) | 'warn' (橙) | 'error' (红)
+        """
+        from datetime import datetime
+        ts = datetime.now().strftime("%H:%M:%S")
+        colors = {
+            "info":    "#007AFF",
+            "success": "#34C759",
+            "warn":    "#FF9500",
+            "error":   "#FF3B30",
+        }
+        color = colors.get(level, "#8E8E93")
+        html = (
+            f'<p style="margin:2px 0;">'
+            f'<span style="color:#8E8E93;">[{ts}]</span> '
+            f'<span style="color:{color};font-weight:600;">[{tag}]</span> '
+            f'<span style="color:#1D1D1F;">{msg}</span>'
+            f'</p>'
+        )
+        self.log_output.append(html)
+        # 自动滚动到底部
+        bar = self.log_output.verticalScrollBar()
+        bar.setValue(bar.maximum())
+
+    def clear_log(self):
+        self.log_output.clear()
+        self.log("工具", "日志已清空")
 
     def show_variable_dialog(self, idx):
         dialog = QDialog(self)
@@ -1114,22 +1412,29 @@ class AddressFinder(QWidget):
         label = QLabel(f"变量名称{idx + 1}:")
         var_input = QLineEdit()
         var_input.setCompleter(completer)
-        var_input.setMinimumWidth(360)
+        var_input.setPlaceholderText("输入变量名...")
+        var_input.setMinimumWidth(500)
 
         select_prefix_button = QPushButton("变量前缀")
         select_prefix_button.clicked.connect(lambda _, i=idx: self.show_variable_dialog(i))
+        select_prefix_button.setCursor(Qt.CursorShape.PointingHandCursor)
         select_common_var_button = QPushButton("常用变量")
         select_common_var_button.clicked.connect(lambda _, i=idx: self.show_common_variable_dialog(i))
+        select_common_var_button.setCursor(Qt.CursorShape.PointingHandCursor)
 
         sn_label = QLabel("软件示波器地址:")
         sn_output = QLineEdit()
         sn_output.setReadOnly(True)
-        sn_output.setMinimumWidth(120)
+        sn_output.setPlaceholderText("—")
+        sn_output.setMinimumWidth(90)
+        sn_output.setMaximumWidth(110)
 
         addr_label = QLabel("MAP地址:")
         addr_output = QLineEdit()
         addr_output.setReadOnly(True)
-        addr_output.setMinimumWidth(120)
+        addr_output.setPlaceholderText("—")
+        addr_output.setMinimumWidth(90)
+        addr_output.setMaximumWidth(110)
 
         # append to lists
         self.var_labels.append(label)
@@ -1155,9 +1460,10 @@ class AddressFinder(QWidget):
         # add separator after every 4 rows
         if (idx + 1) % 4 == 0:
             sep = QFrame()
+            sep.setObjectName("rowSeparator")
             sep.setFrameShape(QFrame.Shape.HLine)
-            sep.setFrameShadow(QFrame.Shadow.Sunken)
-            sep.setLineWidth(1)
+            sep.setFrameShadow(QFrame.Shadow.Plain)
+
             self.entries_layout.addWidget(sep)
 
         # update previous_variables length
@@ -1196,7 +1502,6 @@ class AddressFinder(QWidget):
     def _handle_out_file_change(self, path: str):
         # 如果文件不存在，直接返回；否则尝试刷新 xml 并更新地址
         if not path or not os.path.exists(path):
-            # 有时替换文件会导致 watcher 需要重新添加，尝试重新添加
             try:
                 if path:
                     self.file_watcher.addPath(path)
@@ -1204,6 +1509,7 @@ class AddressFinder(QWidget):
                 pass
             return
 
+        self.log("文件监控", "检测到 OUT 文件变化，自动刷新...", "info")
         # 重新调用刷新逻辑
         try:
             self.refresh_xml_file()
@@ -1271,14 +1577,36 @@ class AddressFinder(QWidget):
         loop_count = min(len(self.Memory_variables), len(self.var_inputs))
         for idx in range(loop_count):
             self.var_inputs[idx].setText(self.Memory_variables[idx])
+        self.log("变量记录", f"已加载 {loop_count} 个历史变量到输入框")
+
+    def clear_all_variables(self):
+        """一键清空所有变量输入框和地址输出框"""
+        cleared = 0
+        for i in range(len(self.var_inputs)):
+            if self.var_inputs[i].text().strip():
+                self.var_inputs[i].clear()
+                self.addr_outputs[i].clear()
+                self.sn_addr_outputs[i].clear()
+                self.previous_variables[i] = ""
+                cleared += 1
+        if cleared > 0:
+            self.log("清除变量", f"已清空 {cleared} 个变量输入及地址", "warn")
+        else:
+            self.log("清除变量", "当前没有需要清除的变量", "info")
 
     def refresh_addresses(self):
         valid_var_names = []
+        self.log("全量刷新", "开始刷新全部变量...")
         self.refresh_xml_file()
+        if not self.xml_file or not os.path.exists(self.xml_file):
+            self.log("全量刷新", "XML 文件生成失败，请检查 ofd6x 和 OUT 路径", "error")
+            return
         dwarf_info = parse_dwarf_xml(self.xml_file)
         if dwarf_info is None:
-            QMessageBox.warning(self, "错误", "解析XML文件失败")
+            self.log("全量刷新", "XML 解析失败，刷新中止", "error")
             return
+        found_count = 0
+        miss_count = 0
         for i in range(len(self.var_inputs)):
             var_name = self.var_inputs[i].text().strip()
             if var_name:
@@ -1286,27 +1614,36 @@ class AddressFinder(QWidget):
                 if address is not None:
                     self.addr_outputs[i].setText(hex(address))
                     sn_address = address - 0x8000
-                    data2 = hex(sn_address)[2:] 
+                    data2 = hex(sn_address)[2:]
                     self.sn_addr_outputs[i].setText(data2)
+                    self.log("变量", f"#{i+1} '{var_name}' → MAP: {hex(address)}, 示波器: {data2}", "success")
+                    found_count += 1
                 else:
                     self.addr_outputs[i].setText("未找到/数组地址越界")
                     self.sn_addr_outputs[i].setText("未找到/数组地址越界")
+                    self.log("变量", f"#{i+1} '{var_name}' — 未找到/地址越界", "warn")
+                    miss_count += 1
                 self.previous_variables[i] = var_name
                 valid_var_names.append(var_name)
             # TODO
-        current_directory = os.path.abspath(os.getcwd())    
+        self.log("全量刷新", f"完成 — 找到 {found_count} 个, 未找到 {miss_count} 个", "success" if miss_count == 0 else "warn")
+        current_directory = os.path.abspath(os.getcwd())
         txt_file_path = os.path.join(current_directory, 'type_sizes.txt')
         write_var_to_memory_block(txt_file_path, valid_var_names)
 
     def partial_refresh_addresses(self):
+        if not self.xml_file or not os.path.exists(self.xml_file):
+            self.log("局部刷新", "XML 文件不存在，请先刷新 XML", "error")
+            return
         dwarf_info = parse_dwarf_xml(self.xml_file)
         if dwarf_info is None:
-            QMessageBox.warning(self, "错误", "解析XML文件失败")
+            self.log("局部刷新", "XML 解析失败，刷新中止", "error")
             return
-        
-        current_directory = os.path.abspath(os.getcwd())    
+
+        current_directory = os.path.abspath(os.getcwd())
         txt_file_path = os.path.join(current_directory, 'type_sizes.txt')
 
+        changed_count = 0
         for i in range(len(self.var_inputs)):
             var_name = self.var_inputs[i].text().strip()
             if var_name != self.previous_variables[i]:
@@ -1316,21 +1653,33 @@ class AddressFinder(QWidget):
                     sn_address = address - 0x8000
                     data2 = hex(sn_address)[2:]
                     self.sn_addr_outputs[i].setText(data2)
+                    self.log("局部刷新", f"#{i+1} '{var_name}' → MAP: {hex(address)}", "success")
                 else:
                     self.addr_outputs[i].setText("未找到/数组地址越界")
                     self.sn_addr_outputs[i].setText("未找到/数组地址越界")
+                    self.log("局部刷新", f"#{i+1} '{var_name}' — 未找到/地址越界", "warn")
                 self.previous_variables[i] = var_name
                 update_specific_line_in_txt(txt_file_path, line_idx=i, new_var_name=var_name)
+                changed_count += 1
+        if changed_count == 0:
+            self.log("局部刷新", "没有检测到变化的变量", "info")
+        else:
+            self.log("局部刷新", f"完成 — 更新了 {changed_count} 个变量", "success")
 
     def refresh_xml_file(self):
         ofd6x_path = self.ofd6x_input.text().strip()
         out_file = self.out_input.text().strip()
+        if not ofd6x_path or not out_file:
+            self.log("XML", "请先设置 ofd6x 工具路径和 OUT 文件路径", "error")
+            return
         self.xml_file = convert_out_to_xml(ofd6x_path, out_file)
 
         if self.xml_file:
             mod_time = time.ctime(os.path.getmtime(self.xml_file))
             self.xml_update_output.setText(f"最新修改日期: {mod_time}")
+            self.log("XML", f"XML 已更新 — {mod_time}", "success")
         else:
+            self.log("XML", "XML 刷新失败", "error")
             QMessageBox.warning(self, "错误", "刷新XML文件失败")
 
     def set_default_ofd6x_path(self):
