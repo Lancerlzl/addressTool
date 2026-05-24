@@ -1165,8 +1165,26 @@ class AddressFinder(QWidget):
         self.type_sizes, self.variables, self.common_variables, self.Control_variables , self.Memory_variables = load_type_sizes(self)  # 获取常用变量
         self.xml_file = None
         self.setStyleSheet(APPLE_QSS)
+        self.setAcceptDrops(True)
         self.initUI()
         self.previous_variables = [""] * RANGE_define
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if len(urls) == 1 and urls[0].toLocalFile().lower().endswith('.out'):
+                event.acceptProposedAction()
+                return
+        event.ignore()
+
+    def dropEvent(self, event):
+        urls = event.mimeData().urls()
+        if urls:
+            out_path = urls[0].toLocalFile()
+            self.out_input.setText(out_path)
+            self.start_watch_out_file(out_path)
+            self.refresh_xml_file()
+            self.log("拖拽导入", f"已加载 OUT 文件: {os.path.basename(out_path)}", "success")
 
     def initUI(self):
         self.setWindowTitle("OUT文件取址工具")
@@ -1297,7 +1315,7 @@ class AddressFinder(QWidget):
         out_layout = QHBoxLayout()
         self.out_label = QLabel("OUT文件路径:")
         self.out_input = QLineEdit()
-        self.out_input.setPlaceholderText("选择编译生成的 .out 文件...")
+        self.out_input.setPlaceholderText("选择或拖拽 .out 文件到窗口...")
         self.out_browse = QPushButton("浏览")
         self.out_browse.setCursor(Qt.CursorShape.PointingHandCursor)
         self.out_browse.clicked.connect(self.browse_out)
