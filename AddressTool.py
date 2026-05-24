@@ -1168,41 +1168,43 @@ class AddressFinder(QWidget):
         self.setAcceptDrops(True)
         self.initUI()
         self.previous_variables = [""] * RANGE_define
-        self._install_drag_filter(self)
+        self._disable_child_drops(self)
 
-    def _install_drag_filter(self, parent):
-        """递归安装拖拽事件过滤器，确保所有子控件都能接收拖拽"""
+    def _disable_child_drops(self, parent):
+        """禁用所有子控件的拖放，让拖放事件冒泡到主窗口处理"""
         for child in parent.findChildren(QWidget):
-            child.setAcceptDrops(True)
-            child.installEventFilter(self)
-            child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+            child.setAcceptDrops(False)
 
-    def _handle_drag_enter(self, event):
+    def _drag_has_out_file(self, event):
+        """检查拖拽事件是否包含单个 .out 文件"""
         if event.mimeData().hasUrls():
             urls = event.mimeData().urls()
             if len(urls) == 1 and urls[0].toLocalFile().lower().endswith('.out'):
-                event.acceptProposedAction()
                 return True
         return False
 
-    def _handle_drop(self, event):
-        urls = event.mimeData().urls()
-        if urls:
-            out_path = urls[0].toLocalFile()
+    def dragEnterEvent(self, event):
+        if self._drag_has_out_file(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        if self._drag_has_out_file(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        if self._drag_has_out_file(event):
+            out_path = event.mimeData().urls()[0].toLocalFile()
             self.out_input.setText(out_path)
             self.start_watch_out_file(out_path)
             self.refresh_xml_file()
             self.log("拖拽导入", f"已加载 OUT 文件: {os.path.basename(out_path)}", "success")
-
-    def eventFilter(self, obj, event):
-        if event.type() == event.Type.DragEnter:
-            return self._handle_drag_enter(event)
-        elif event.type() == event.Type.DragMove:
-            return self._handle_drag_enter(event)
-        elif event.type() == event.Type.Drop:
-            self._handle_drop(event)
-            return True
-        return super().eventFilter(obj, event)
+            event.acceptProposedAction()
+        else:
+            event.ignore()
 
     def initUI(self):
         self.setWindowTitle("OUT文件取址工具")
