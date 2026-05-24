@@ -310,27 +310,55 @@ class ArrayVariable:
 #@return 说明：int
 #@retval 1. 返回全局变量地址
 ####################################################################
+def _is_eabi_format(dwarf_info):
+    """检测 XML 是否为 ofd2000 生成的 EABI/ELF 格式"""
+    return dwarf_info.find('.//elf32_ehdr') is not None
+
+
+def _find_dwarf_value(die, attr_name):
+    """查找 DWARF 属性的值文本，兼容 ofd6x (<block>) 和 ofd2000 (<exprloc>)"""
+    for tag in ('exprloc', 'block'):
+        elem = die.find(f".//attribute[type='{attr_name}']/value/{tag}")
+        if elem is not None:
+            return elem.text
+    return None
+
+
 def get_global_variable_address(dwarf_info, var_name):
-    # 查找<symbol_table>元素
-    symbol_table = dwarf_info.find('.//symbol_table')  # 使用XPath查找第一个<symbol_table>
+    symbol_table = dwarf_info.find('.//symbol_table')
+    is_eabi = _is_eabi_format(dwarf_info)
+
     if symbol_table is not None:
-        var_name_with_prefix = f"_{var_name}"           #名字前面 + _
-        for symbol in symbol_table.iter('symbol'):
-            name_element = symbol.find('name')
-            if name_element is not None and name_element.text == var_name_with_prefix:
-                value_element = symbol.find('value')
-                if value_element is not None:
-                    return int(value_element.text, 16)
-            
-    # 上面方法没找到的话，变量可能是局部静态变量，需要用另外的方法找        
+        if is_eabi:
+            # ofd2000 EABI/ELF: <elf32_sym> → <st_name_string>/<st_value>, 无 _ 前缀
+            for sym in symbol_table.iter('elf32_sym'):
+                name_elem = sym.find('st_name_string')
+                if name_elem is not None and name_elem.text == var_name:
+                    bind_elem = sym.find('st_bind')
+                    if bind_elem is not None and bind_elem.text != 'STB_GLOBAL':
+                        continue
+                    value_elem = sym.find('st_value')
+                    if value_elem is not None:
+                        return int(value_elem.text, 16)
+        else:
+            # ofd6x COFF: <symbol> → <name>/<value>, 有 _ 前缀
+            var_name_with_prefix = f"_{var_name}"
+            for symbol in symbol_table.iter('symbol'):
+                name_element = symbol.find('name')
+                if name_element is not None and name_element.text == var_name_with_prefix:
+                    value_element = symbol.find('value')
+                    if value_element is not None:
+                        return int(value_element.text, 16)
+
+    # DWARF DIE 回退查找（静态局部变量等，兼容 ofd6x 和 ofd2000）
     for die in dwarf_info.iter('die'):
         name_attr = die.find(".//attribute[type='DW_AT_name']/value/string")
-        if name_attr is not None and name_attr.text == var_name:                # 找到与变量名一样的name
-            base_attr = die.find(".//attribute[type='DW_AT_location']/value/block")
-            if base_attr is not None:
-                value_element = base_attr.text.split()[-1]                         # 第二个参数就是变量地址
+        if name_attr is not None and name_attr.text == var_name:
+            text = _find_dwarf_value(die, 'DW_AT_location')
+            if text is not None:
+                value_element = text.split()[-1]
                 if value_element is not None:
-                    return int(value_element, 16)      
+                    return int(value_element, 16)
     return None
 
 #######################################################################
@@ -339,12 +367,12 @@ def get_global_variable_address(dwarf_info, var_name):
 #                      
 ####################################################################
 def get_struct_member_offset(dwarf_info, base_address, struct_name, member_name):
-    for die in dwarf_info.iter('die'):                                              # 轮询die  
-        name_attr = die.find(".//attribute[type='DW_AT_name']/value/string")       
-        if name_attr is not None and name_attr.text == member_name:                 # 找到与变量名一样的id  
-            offset_attr = die.find(".//attribute[type='DW_AT_data_member_location']/value/block") # 找到里面的偏移地址  
-            if offset_attr is not None:
-                offset_value = offset_attr.text.split()[-1]
+    for die in dwarf_info.iter('die'):                                              # 轮询die
+        name_attr = die.find(".//attribute[type='DW_AT_name']/value/string")
+        if name_attr is not None and name_attr.text == member_name:                 # 找到与变量名一样的id
+            text = _find_dwarf_value(die, 'DW_AT_data_member_location')             # 兼容 ofd6x/ofd2000
+            if text is not None:
+                offset_value = text.split()[-1]
                 offset = int(offset_value, 16)
                 return base_address + offset
     return None
@@ -377,9 +405,9 @@ def get_variable_baseaddress_regular_array(dwarf_info, array_var):
     for die in dwarf_info.iter('die'):
         name_attr = die.find(".//attribute[type='DW_AT_name']/value/string")
         if name_attr is not None and name_attr.text == array_var.base_name:
-            base_attr = die.find(".//attribute[type='DW_AT_location']/value/block")
-            if base_attr is not None:
-                base_value = base_attr.text.split()[-1]
+            text = _find_dwarf_value(die, 'DW_AT_location')
+            if text is not None:
+                base_value = text.split()[-1]
                 base = int(base_value, 16)
 
                 type_attr = die.find(".//attribute[type='DW_AT_type']/value/ref")
@@ -556,9 +584,9 @@ def get_variable_address_struct_array_offset(xml_file, base_address, struct_name
                 if member_die.find('tag').text == "DW_TAG_member":
                     member_name_attr = member_die.find(".//attribute[type='DW_AT_name']/value/string")
                     if member_name_attr is not None and member_name_attr.text == array_name:       # 找到和变量名字一样的 变量die
-                        offset_attr = member_die.find(".//attribute[type='DW_AT_data_member_location']/value/block")    #找到变量的相对于结构体的偏移地址
-                        if offset_attr is not None:
-                            offset_value = offset_attr.text.split()[-1]
+                        text = _find_dwarf_value(member_die, 'DW_AT_data_member_location')    #找到变量的相对于结构体的偏移地址
+                        if text is not None:
+                            offset_value = text.split()[-1]
                             struct_offset = int(offset_value, 16)   # 转成16进制
 
                         type_attr = member_die.find(".//attribute[type='DW_AT_type']/value/ref") #  找到变量的数据类型
@@ -579,9 +607,9 @@ def get_variable_address_struct_array_offset(xml_file, base_address, struct_name
                     if member_die.find('tag').text == "DW_TAG_member":
                         member_name_attr = member_die.find(".//attribute[type='DW_AT_name']/value/string")
                         if member_name_attr is not None and member_name_attr.text == array_name:       # 找到和变量名字一样的 变量die
-                            offset_attr = member_die.find(".//attribute[type='DW_AT_data_member_location']/value/block")    #找到变量的相对于结构体的偏移地址
-                            if offset_attr is not None:
-                                offset_value = offset_attr.text.split()[-1]
+                            text = _find_dwarf_value(member_die, 'DW_AT_data_member_location')    #找到变量的相对于结构体的偏移地址
+                            if text is not None:
+                                offset_value = text.split()[-1]
                                 struct_offset = int(offset_value, 16)   # 转成16进制
 
                             type_attr = member_die.find(".//attribute[type='DW_AT_type']/value/ref")#找到变量的数据类型
@@ -727,9 +755,9 @@ def get_variable_address_struct_array(root, var_name, type_sizes):
         for die in root.iter('die'):
             name_attr = die.find(".//attribute[type='DW_AT_name']/value/string")
             if name_attr is not None and name_attr.text == names[1]:                # 找到与变量名一样的name
-                base_attr = die.find(".//attribute[type='DW_AT_data_member_location']/value/block")
-                if base_attr is not None:
-                    value_element = base_attr.text.split()[-1]                         # 第二个参数就是变量地址
+                text = _find_dwarf_value(die, 'DW_AT_data_member_location')
+                if text is not None:
+                    value_element = text.split()[-1]                         # 第二个参数就是变量地址
                     if value_element is not None:
                         struct_offset_0 =  int(value_element, 16)    
 
@@ -972,10 +1000,10 @@ def load_type_sizes(self):
 
 def convert_out_to_xml(ofd6x_path, out_file):
     xml_file = os.path.splitext(out_file)[0] + ".xml"
-    cmd = f"{ofd6x_path} --xml --dwarf {out_file} > {xml_file}"
+    cmd = f'"{ofd6x_path}" --xml --dwarf "{out_file}" > "{xml_file}"'
 
     try:
-        subprocess.run(cmd, shell=True, check=True)
+        subprocess.run(cmd, shell=True, check=True, stderr=subprocess.PIPE)
     except subprocess.CalledProcessError as e:
         print(f"执行命令时发生错误: {e}")
         return None
@@ -1253,9 +1281,9 @@ class AddressFinder(QWidget):
         self.default_path_button = QPushButton("默认路径")
         self.default_path_button.clicked.connect(self.set_default_ofd6x_path)
         self.default_path_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.ofd6x_label = QLabel("ofd6x工具路径:")
+        self.ofd6x_label = QLabel("ofd工具路径:")
         self.ofd6x_input = QLineEdit()
-        self.ofd6x_input.setPlaceholderText("选择或输入 ofd6x.exe 的路径...")
+        self.ofd6x_input.setPlaceholderText("选择或输入 ofd2000.exe / ofd6x.exe 的路径...")
         self.ofd6x_browse = QPushButton("浏览")
         self.ofd6x_browse.setCursor(Qt.CursorShape.PointingHandCursor)
         self.ofd6x_browse.clicked.connect(self.browse_ofd6x)
@@ -1559,7 +1587,8 @@ class AddressFinder(QWidget):
         dialog.exec()
 
     def browse_ofd6x(self):
-        path, _ = QFileDialog.getOpenFileName(self, "选择ofd6x工具路径")
+        path, _ = QFileDialog.getOpenFileName(self, "选择ofd工具路径",
+            filter="ofd工具 (ofd2000.exe ofd6x.exe);;可执行文件 (*.exe)")
         if path:
             self.ofd6x_input.setText(path)
 
@@ -1684,23 +1713,29 @@ class AddressFinder(QWidget):
 
     def set_default_ofd6x_path(self):
         current_dir = os.path.abspath(os.getcwd())
-        ofd6x_path = find_file_in_directory(current_dir, "ofd6x.exe")
-        if ofd6x_path:
-            self.ofd6x_input.setText(ofd6x_path)
+        ofd_path = find_file_in_directory(current_dir, "ofd2000.exe") or \
+                   find_file_in_directory(current_dir, "ofd6x.exe")
+        if ofd_path:
+            self.ofd6x_input.setText(ofd_path)
         else:
-            QMessageBox.warning(self, "错误", "在当前路径下未找到 ofd6x.exe,")
+            QMessageBox.warning(self, "错误", "在当前路径下未找到 ofd2000.exe 或 ofd6x.exe")
 
     def auto_find_tools(self):
         # 获取当前工作目录的绝对路径
         current_directory = os.path.abspath(os.getcwd())
 
-        # 查找当前目录下的 ofd6x.exe 文件
-        ofd6x_files = [f for f in os.listdir(current_directory) if f == 'ofd6x.exe']
-        if ofd6x_files:
-            ofd6x_path = os.path.join(current_directory, ofd6x_files[0])
-            self.ofd6x_input.setText(ofd6x_path)
+        # 优先查找 ofd2000.exe（支持 EABI），其次 ofd6x.exe（兼容 COFF）
+        ofd_path = None
+        for exe_name in ("ofd2000.exe", "ofd6x.exe"):
+            files = [f for f in os.listdir(current_directory) if f == exe_name]
+            if files:
+                ofd_path = os.path.join(current_directory, files[0])
+                break
+
+        if ofd_path:
+            self.ofd6x_input.setText(ofd_path)
         else:
-            QMessageBox.warning(self, "警告", "当前路径下未找到 ofd6x.exe 文件")
+            QMessageBox.warning(self, "警告", "当前路径下未找到 ofd2000.exe 或 ofd6x.exe 文件")
             return None
 
         # 查找当前目录下的 .out 文件
