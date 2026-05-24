@@ -1168,16 +1168,24 @@ class AddressFinder(QWidget):
         self.setAcceptDrops(True)
         self.initUI()
         self.previous_variables = [""] * RANGE_define
+        self._install_drag_filter(self)
 
-    def dragEnterEvent(self, event):
+    def _install_drag_filter(self, parent):
+        """递归安装拖拽事件过滤器，确保所有子控件都能接收拖拽"""
+        for child in parent.findChildren(QWidget):
+            child.setAcceptDrops(True)
+            child.installEventFilter(self)
+            child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+
+    def _handle_drag_enter(self, event):
         if event.mimeData().hasUrls():
             urls = event.mimeData().urls()
             if len(urls) == 1 and urls[0].toLocalFile().lower().endswith('.out'):
                 event.acceptProposedAction()
-                return
-        event.ignore()
+                return True
+        return False
 
-    def dropEvent(self, event):
+    def _handle_drop(self, event):
         urls = event.mimeData().urls()
         if urls:
             out_path = urls[0].toLocalFile()
@@ -1185,6 +1193,16 @@ class AddressFinder(QWidget):
             self.start_watch_out_file(out_path)
             self.refresh_xml_file()
             self.log("拖拽导入", f"已加载 OUT 文件: {os.path.basename(out_path)}", "success")
+
+    def eventFilter(self, obj, event):
+        if event.type() == event.Type.DragEnter:
+            return self._handle_drag_enter(event)
+        elif event.type() == event.Type.DragMove:
+            return self._handle_drag_enter(event)
+        elif event.type() == event.Type.Drop:
+            self._handle_drop(event)
+            return True
+        return super().eventFilter(obj, event)
 
     def initUI(self):
         self.setWindowTitle("OUT文件取址工具")
