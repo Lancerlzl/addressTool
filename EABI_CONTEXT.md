@@ -60,7 +60,8 @@ _is_eabi_format() → 有 <elf32_ehdr>？
 
 ## TODO / 待续
 
-- [ ] 过滤非 `DW_OP_addr` 类型的地址，给出有意义的提示
+- [x] 过滤非 `DW_OP_addr` 类型的地址，给出有意义的提示 — `_find_dwarf_value()` 自动过滤 `DW_OP_bregXX` / `DW_OP_fbreg`
+- [x] 支持拖拽 .out 文件到窗口 — 禁用子控件拖放 + 主窗口 dragEnterEvent/dragMoveEvent/dropEvent
 - [ ] 编译一个 COFF 格式的老 .out 文件做完整回归测试
 - [ ] 考虑支持 `_linkInfo.xml` 作为 ofd 工具不可用时的 fallback
 

@@ -316,10 +316,16 @@ def _is_eabi_format(dwarf_info):
 
 
 def _find_dwarf_value(die, attr_name):
-    """查找 DWARF 属性的值文本，兼容 ofd6x (<block>) 和 ofd2000 (<exprloc>)"""
+    """查找 DWARF 属性的值文本，兼容 ofd6x (<block>) 和 ofd2000 (<exprloc>)
+
+    自动过滤栈/寄存器相对地址（DW_OP_bregXX / DW_OP_fbreg），
+    这些是编译器优化到栈上的变量，没有固定内存地址，返回 None 避免给出无意义的栈偏移值。
+    """
     for tag in ('exprloc', 'block'):
         elem = die.find(f".//attribute[type='{attr_name}']/value/{tag}")
-        if elem is not None:
+        if elem is not None and elem.text is not None:
+            if 'DW_OP_breg' in elem.text or 'DW_OP_fbreg' in elem.text:
+                return None
             return elem.text
     return None
 
