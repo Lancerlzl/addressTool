@@ -1221,11 +1221,6 @@ class AddressFinder(QWidget):
             f"<p>作者: Lancer</p>"
         )
 
-    def toggle_log_panel(self):
-        """切换日志面板的显示/隐藏"""
-        visible = self.log_toggle_btn.isChecked()
-        self.log_widget.setVisible(visible)
-
     def initUI(self):
         self.setWindowTitle("OUT文件取址工具")
         self.setGeometry(100, 100, 1700, 920)
@@ -1246,20 +1241,11 @@ class AddressFinder(QWidget):
             QMenu::item { padding: 6px 24px; border-radius: 4px; }
             QMenu::item:selected { background: #007AFF; color: white; }
         """)
-        # 日志开关按钮（菜单栏左侧）
-        self.log_toggle_btn = QPushButton("日志")
-        self.log_toggle_btn.setCheckable(True)
-        self.log_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.log_toggle_btn.setStyleSheet("""
-            QPushButton {
-                background: #F2F2F7; color: #1D1D1F; border: 1px solid #D1D1D6;
-                border-radius: 4px; padding: 3px 14px; font-size: 13px; margin: 3px 8px;
-            }
-            QPushButton:hover { background: #E5E5EA; }
-            QPushButton:checked { background: #007AFF; color: white; border-color: #007AFF; }
-        """)
-        self.log_toggle_btn.clicked.connect(self.toggle_log_panel)
-        menubar.setCornerWidget(self.log_toggle_btn, Qt.Corner.TopLeftCorner)
+        # 日志开关（菜单栏左侧，与"帮助"统一样式）
+        log_menu = menubar.addMenu("日志")
+        self.log_action = log_menu.addAction("显示日志面板")
+        self.log_action.setCheckable(True)
+        self.log_action.triggered.connect(lambda checked: self.log_widget.setVisible(checked))
         help_menu = menubar.addMenu("帮助")
         about_action = help_menu.addAction("关于")
         about_action.triggered.connect(self.show_about)
@@ -1359,7 +1345,6 @@ class AddressFinder(QWidget):
         self.refresh_xml_button.clicked.connect(self.refresh_xml_file)
         self.refresh_xml_button.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        top_layout.addLayout(info_layout)
         top_layout.addStretch(1)
         top_layout.addWidget(self.Var_refres_button)
         top_layout.addWidget(self.clear_all_button)
@@ -1368,6 +1353,19 @@ class AddressFinder(QWidget):
         top_layout.addWidget(self.refresh_xml_button)
 
         layout.addLayout(top_layout)
+
+        # XML update info output（按钮行下方）
+        self.xml_update_label = QLabel("XML更新信息:")
+        self.xml_update_output = QLineEdit()
+        self.xml_update_output.setReadOnly(True)
+        self.xml_update_output.setPlaceholderText("等待刷新...")
+        xml_update_layout = QHBoxLayout()
+        xml_update_layout.addWidget(self.xml_update_label)
+        xml_update_layout.addWidget(self.xml_update_output)
+        layout.addLayout(xml_update_layout)
+
+        # TODO 提示信息
+        layout.addLayout(info_layout)
 
         # ofd6x path input
         ofd6x_layout = QHBoxLayout()
@@ -1399,17 +1397,8 @@ class AddressFinder(QWidget):
         out_layout.addWidget(self.out_browse)
         layout.addLayout(out_layout)
 
-        # XML update info output
-        self.xml_update_label = QLabel("XML更新信息:")
-        self.xml_update_output = QLineEdit()
-        self.xml_update_output.setReadOnly(True)
-        self.xml_update_output.setPlaceholderText("等待刷新...")
-        xml_update_layout = QHBoxLayout()
-        xml_update_layout.addWidget(self.xml_update_label)
-        xml_update_layout.addWidget(self.xml_update_output)
-        layout.addLayout(xml_update_layout)
 
-        
+
         # Variable names input (move to a scrollable area, use grid layout for compactness)
         # Variable names input (默认 20 行，可追加更多)
         self.var_labels = []
