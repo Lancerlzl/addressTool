@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QScrollArea, QSizePolicy, QGridLayout, QTextEdit, QMenuBar
 )
 from PyQt6.QtCore import Qt, QFileSystemWatcher, QTimer
+from PyQt6.QtGui import QPainter, QPixmap, QIcon, QColor, QFont, QLinearGradient, QBrush, QPen
 
 RANGE_define = 20  # 定义变量数
 
@@ -96,6 +97,38 @@ QPushButton#clearAllBtn:hover {
 
 QPushButton#clearAllBtn:pressed {
     background-color: #C02E25;
+}
+
+/* 常用变量按钮 — 琥珀色 */
+QPushButton#commonVarBtn {
+    background-color: #FF9500;
+    color: #FFFFFF;
+    border: none;
+    font-weight: 600;
+}
+
+QPushButton#commonVarBtn:hover {
+    background-color: #E68600;
+}
+
+QPushButton#commonVarBtn:pressed {
+    background-color: #CC7700;
+}
+
+/* 变量前缀按钮 — 蓝绿色 */
+QPushButton#prefixBtn {
+    background-color: #5AC8FA;
+    color: #FFFFFF;
+    border: none;
+    font-weight: 600;
+}
+
+QPushButton#prefixBtn:hover {
+    background-color: #4DB8E8;
+}
+
+QPushButton#prefixBtn:pressed {
+    background-color: #40A8D6;
 }
 
 /* ===== 输入框 ===== */
@@ -1165,9 +1198,36 @@ def update_specific_line_in_txt(file_path, line_idx, new_var_name):
 
 
 
+def _create_app_icon():
+    """生成 App 图标：蓝紫渐变圆角方形 + 白色 A 字母"""
+    size = 256
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+    # 蓝紫渐变背景圆角方形
+    gradient = QLinearGradient(0, 0, size, size)
+    gradient.setColorAt(0.0, QColor("#007AFF"))
+    gradient.setColorAt(1.0, QColor("#5856D6"))
+    painter.setBrush(QBrush(gradient))
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.drawRoundedRect(8, 8, size - 16, size - 16, 48, 48)
+
+    # 白色 A 字母
+    painter.setPen(QColor("#FFFFFF"))
+    font = QFont("Segoe UI", 120, QFont.Weight.Bold)
+    painter.setFont(font)
+    painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, "A")
+
+    painter.end()
+    return QIcon(pixmap)
+
+
 class AddressFinder(QWidget):
     def __init__(self):
         super().__init__()
+        self.setWindowIcon(_create_app_icon())
         self.type_sizes, self.variables, self.common_variables, self.Control_variables , self.Memory_variables = load_type_sizes(self)  # 获取常用变量
         self.xml_file = None
         self.setStyleSheet(APPLE_QSS)
@@ -1523,9 +1583,11 @@ class AddressFinder(QWidget):
         var_input.setMinimumWidth(500)
 
         select_prefix_button = QPushButton("变量前缀")
+        select_prefix_button.setObjectName("prefixBtn")
         select_prefix_button.clicked.connect(lambda _, i=idx: self.show_variable_dialog(i))
         select_prefix_button.setCursor(Qt.CursorShape.PointingHandCursor)
         select_common_var_button = QPushButton("常用变量")
+        select_common_var_button.setObjectName("commonVarBtn")
         select_common_var_button.clicked.connect(lambda _, i=idx: self.show_common_variable_dialog(i))
         select_common_var_button.setCursor(Qt.CursorShape.PointingHandCursor)
 
