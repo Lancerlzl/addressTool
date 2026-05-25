@@ -1217,12 +1217,14 @@ class AddressFinder(QWidget):
         QMessageBox.about(self, "关于 AddressTool",
             f"<h3>OUT文件取址工具</h3>"
             f"<p>版本: V20260525</p>"
+            f"<p>公司: Sineng</p>"
             f"<p>作者: Lancer</p>"
-            f"<hr>"
-            f"<p>基于 TI ofd2000.exe / ofd6x.exe 的 DWARF 调试信息解析工具，<br>"
-            f"用于快速查找 C2000 系列 DSP 固件中变量的内存地址。</p>"
-            f"<p>自适应兼容 COFF 和 EABI (ELF) 两种 .out 格式。</p>"
         )
+
+    def toggle_log_panel(self):
+        """切换日志面板的显示/隐藏"""
+        visible = self.log_toggle_btn.isChecked()
+        self.log_widget.setVisible(visible)
 
     def initUI(self):
         self.setWindowTitle("OUT文件取址工具")
@@ -1244,6 +1246,20 @@ class AddressFinder(QWidget):
             QMenu::item { padding: 6px 24px; border-radius: 4px; }
             QMenu::item:selected { background: #007AFF; color: white; }
         """)
+        # 日志开关按钮（菜单栏左侧）
+        self.log_toggle_btn = QPushButton("日志")
+        self.log_toggle_btn.setCheckable(True)
+        self.log_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.log_toggle_btn.setStyleSheet("""
+            QPushButton {
+                background: #F2F2F7; color: #1D1D1F; border: 1px solid #D1D1D6;
+                border-radius: 4px; padding: 3px 14px; font-size: 13px; margin: 3px 8px;
+            }
+            QPushButton:hover { background: #E5E5EA; }
+            QPushButton:checked { background: #007AFF; color: white; border-color: #007AFF; }
+        """)
+        self.log_toggle_btn.clicked.connect(self.toggle_log_panel)
+        menubar.setCornerWidget(self.log_toggle_btn, Qt.Corner.TopLeftCorner)
         help_menu = menubar.addMenu("帮助")
         about_action = help_menu.addAction("关于")
         about_action.triggered.connect(self.show_about)
@@ -1255,7 +1271,10 @@ class AddressFinder(QWidget):
         outer_layout.setSpacing(12)
 
         # ========== 左侧日志面板 ==========
-        log_panel = QVBoxLayout()
+        self.log_widget = QWidget()
+        self.log_widget.setVisible(False)  # 默认隐藏，点击"日志"按钮后显示
+        log_panel = QVBoxLayout(self.log_widget)
+        log_panel.setContentsMargins(0, 0, 0, 0)
         log_panel.setSpacing(8)
 
         log_title_layout = QHBoxLayout()
@@ -1302,20 +1321,18 @@ class AddressFinder(QWidget):
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
         """)
         log_panel.addWidget(self.log_output, 1)
-        outer_layout.addLayout(log_panel)
+        outer_layout.addWidget(self.log_widget)
 
         # ========== 右侧主界面（原有全部内容） ==========
         layout = QVBoxLayout()
         layout.setSpacing(8)
 
-        # Top info layout with author, version, and refresh button
+        # Top info layout
         top_layout = QHBoxLayout()
 
         info_layout = QVBoxLayout()
-        self.company_version_label = QLabel("公司: Sineng  版本: V20260523 ")
         self.TODO_label = QLabel("TODO: 不支持二维数组以上的搜索;  局部刷新只会更新名称有变化的变量;")
         self.TODO_label1 = QLabel("系数   U16变量:0    电流:336     电网电压:690   母线电压:1200")
-        info_layout.addWidget(self.company_version_label)
         info_layout.addWidget(self.TODO_label)
         info_layout.addWidget(self.TODO_label1)
 
