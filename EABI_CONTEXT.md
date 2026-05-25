@@ -2,7 +2,7 @@
 
 ## 时间
 
-2026-05-24
+2026-05-24 ~ 2026-05-25
 
 ## Git 分支
 
@@ -56,12 +56,27 @@ _is_eabi_format() → 有 <elf32_ehdr>？
 ## 已知问题
 
 1. EABI 编译器 (v25.11) 在 -O0 也会将"只在单个函数内使用的文件作用域变量"降级到栈帧（`DW_OP_bregXX`），这些变量没有固定内存地址。解决：加 `volatile` 关键字。
-2. 工具尚未过滤 `DW_OP_bregXX` 类型的非绝对地址，会返回无意义的栈偏移值。
+
+## 后续新增功能 (2026-05-25)
+
+### 5. 拖拽导入 .out 文件
+- 重写为禁用子控件拖放 (`setAcceptDrops(False)`) + 主窗口 `dragEnterEvent`/`dragMoveEvent`/`dropEvent` 统一处理
+- 仅接受单个 `.out` 文件，拖入后自动加载并刷新 XML
+
+### 6. DW_OP_bregXX 栈偏移过滤
+- `_find_dwarf_value()` 自动检测 `DW_OP_breg` / `DW_OP_fbreg`，返回 `None` 避免给出无意义的栈偏移值
+
+### 7. 菜单栏与关于对话框
+- 顶部菜单栏：`日志`（可勾选切换日志面板，默认隐藏）/ `帮助 → 关于`
+- 关于对话框显示版本 (V20260525)、公司 (Sineng)、作者 (Lancer)
+- 主界面移除公司/版本标签行
 
 ## TODO / 待续
 
-- [x] 过滤非 `DW_OP_addr` 类型的地址，给出有意义的提示 — `_find_dwarf_value()` 自动过滤 `DW_OP_bregXX` / `DW_OP_fbreg`
-- [x] 支持拖拽 .out 文件到窗口 — 禁用子控件拖放 + 主窗口 dragEnterEvent/dragMoveEvent/dropEvent
+- [x] 过滤非 `DW_OP_addr` 类型的地址 — `_find_dwarf_value()` 自动过滤 `DW_OP_bregXX` / `DW_OP_fbreg`
+- [x] 支持拖拽 .out 文件到窗口
+- [x] 帮助菜单栏 + 关于对话框
+- [x] 日志面板可切换显示/隐藏
 - [ ] 编译一个 COFF 格式的老 .out 文件做完整回归测试
 - [ ] 考虑支持 `_linkInfo.xml` 作为 ofd 工具不可用时的 fallback
 
