@@ -1,16 +1,19 @@
 # AddressTool — C2000 DSP 变量地址查询工具
 
-基于 TI ofd6x.exe 的 DWARF 调试信息解析工具，用于快速查找 C2000 系列 DSP 固件中变量的内存地址。
+基于 TI ofd2000.exe/ofd6x.exe 的 DWARF 调试信息解析工具，用于快速查找 C2000 系列 DSP 固件中变量的内存地址。自适应兼容 COFF 和 EABI (ELF) 两种 `.out` 格式。
 
 ## 功能
 
 - 将 DSP 编译产物 `.out` 文件转换为 DWARF XML 并解析
+- **自动识别 COFF / EABI 格式**：支持 ofd6x.exe (CCS 旧版 COFF) 和 ofd2000.exe (CCS 20 EABI/ELF)
+- **拖拽导入**：直接拖拽 `.out` 文件到窗口自动加载，无需手动浏览路径
 - 支持全局变量、结构体成员（`.` 点号嵌套）、一维/二维数组（`[i][j]`）地址查询
 - 计算 MAP 地址和软件示波器地址（MAP − 0x8000）
 - 文件监控：OUT 文件变化时自动刷新 XML 和地址
 - 变量前缀/常用变量快捷输入
 - 局部刷新：仅更新名称有变化的变量
 - 变量记录：持久化变量名到 `type_sizes.txt`
+- **栈变量智能过滤**：自动过滤 `DW_OP_bregXX`/`DW_OP_fbreg` 等无固定内存地址的栈优化变量，避免返回无意义偏移值
 
 ## 依赖
 
@@ -18,7 +21,8 @@
 |------|------|
 | Python 3 | 运行时 |
 | PyQt6 | GUI 框架 |
-| ofd6x.exe | TI 官方 Object File Display 工具（已内置） |
+| ofd2000.exe | TI C2000 Object File Display（CCS 20 EABI，优先使用） |
+| ofd6x.exe | TI C2000 Object File Display（旧版 COFF，回退兼容） |
 | type_sizes.txt | 数据类型大小与变量配置（已内置） |
 
 ## 快速开始
@@ -32,6 +36,7 @@ python AddressTool.py
 
 | 版本 | 日期 | 更新内容 |
 |------|------|----------|
+| **V20260525** | 2026-05-25 | EABI 自适应兼容：支持 ofd2000.exe 解析 CCS 20 EABI/ELF 格式 .out 文件，自动检测 COFF/EABI 格式双路径解析（elf32_sym/st_name_string vs symbol/name）；DWARF 地址标签兼容 `<exprloc>`/`<block>`；拖拽 .out 文件到窗口自动导入；过滤 DW_OP_bregXX/DW_OP_fbreg 栈偏移，避免返回无意义地址 |
 | **V20260523** | 2026-05-23 | Apple 风格 QSS 全局美化；左侧日志面板（带颜色分级）；一键清除变量按钮（红色）；变量输入框加宽、地址框收窄；按钮分层（蓝=全量刷新 / 绿=局部刷新 / 红=清除）；XML 缺失时防闪退保护 |
 | V20260421 | 2026-04-21 | OUT 文件变化时自动刷新 XML 和地址 |
 | V1.1.1 | — | 中文路径兼容修复 |
