@@ -1345,6 +1345,7 @@ class AddressFinder(QWidget):
         self.refresh_xml_button.clicked.connect(self.refresh_xml_file)
         self.refresh_xml_button.setCursor(Qt.CursorShape.PointingHandCursor)
 
+        top_layout.addLayout(info_layout)
         top_layout.addStretch(1)
         top_layout.addWidget(self.Var_refres_button)
         top_layout.addWidget(self.clear_all_button)
@@ -1353,19 +1354,6 @@ class AddressFinder(QWidget):
         top_layout.addWidget(self.refresh_xml_button)
 
         layout.addLayout(top_layout)
-
-        # XML update info output（按钮行下方）
-        self.xml_update_label = QLabel("XML更新信息:")
-        self.xml_update_output = QLineEdit()
-        self.xml_update_output.setReadOnly(True)
-        self.xml_update_output.setPlaceholderText("等待刷新...")
-        xml_update_layout = QHBoxLayout()
-        xml_update_layout.addWidget(self.xml_update_label)
-        xml_update_layout.addWidget(self.xml_update_output)
-        layout.addLayout(xml_update_layout)
-
-        # TODO 提示信息
-        layout.addLayout(info_layout)
 
         # ofd6x path input
         ofd6x_layout = QHBoxLayout()
@@ -1397,6 +1385,15 @@ class AddressFinder(QWidget):
         out_layout.addWidget(self.out_browse)
         layout.addLayout(out_layout)
 
+        # XML update info output
+        self.xml_update_label = QLabel("XML更新信息:")
+        self.xml_update_output = QLineEdit()
+        self.xml_update_output.setReadOnly(True)
+        self.xml_update_output.setPlaceholderText("等待刷新...")
+        xml_update_layout = QHBoxLayout()
+        xml_update_layout.addWidget(self.xml_update_label)
+        xml_update_layout.addWidget(self.xml_update_output)
+        layout.addLayout(xml_update_layout)
 
 
         # Variable names input (move to a scrollable area, use grid layout for compactness)
