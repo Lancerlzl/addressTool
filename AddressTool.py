@@ -14,7 +14,7 @@ import subprocess
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QFileDialog,
     QMessageBox, QCompleter, QListWidget, QListWidgetItem, QDialog, QDialogButtonBox, QFrame,
-    QScrollArea, QSizePolicy, QGridLayout, QTextEdit
+    QScrollArea, QSizePolicy, QGridLayout, QTextEdit, QMenuBar
 )
 from PyQt6.QtCore import Qt, QFileSystemWatcher, QTimer
 
@@ -1212,10 +1212,42 @@ class AddressFinder(QWidget):
         else:
             event.ignore()
 
+    def show_about(self):
+        """显示关于对话框"""
+        QMessageBox.about(self, "关于 AddressTool",
+            f"<h3>OUT文件取址工具</h3>"
+            f"<p>版本: V20260525</p>"
+            f"<p>作者: Lancer</p>"
+            f"<hr>"
+            f"<p>基于 TI ofd2000.exe / ofd6x.exe 的 DWARF 调试信息解析工具，<br>"
+            f"用于快速查找 C2000 系列 DSP 固件中变量的内存地址。</p>"
+            f"<p>自适应兼容 COFF 和 EABI (ELF) 两种 .out 格式。</p>"
+        )
+
     def initUI(self):
         self.setWindowTitle("OUT文件取址工具")
         self.setGeometry(100, 100, 1700, 920)
         self.setMinimumSize(1450, 800)
+
+        # ===== 顶层布局：菜单栏 + 主界面 =====
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # 菜单栏
+        menubar = QMenuBar()
+        menubar.setStyleSheet("""
+            QMenuBar { background: #E8E8ED; border-bottom: 1px solid #D1D1D6; padding: 2px 8px; font-size: 13px; }
+            QMenuBar::item { padding: 4px 12px; border-radius: 4px; }
+            QMenuBar::item:selected { background: #D1D1D6; }
+            QMenu { background: #F5F5F7; border: 1px solid #D1D1D6; border-radius: 6px; padding: 4px; }
+            QMenu::item { padding: 6px 24px; border-radius: 4px; }
+            QMenu::item:selected { background: #007AFF; color: white; }
+        """)
+        help_menu = menubar.addMenu("帮助")
+        about_action = help_menu.addAction("关于")
+        about_action.triggered.connect(self.show_about)
+        main_layout.addWidget(menubar)
 
         # ===== 顶级水平布局：左侧日志 + 右侧主界面 =====
         outer_layout = QHBoxLayout()
@@ -1399,7 +1431,7 @@ class AddressFinder(QWidget):
         layout.addWidget(scroll)
 
         outer_layout.addLayout(layout, 1)
-        self.setLayout(outer_layout)
+        main_layout.addLayout(outer_layout)
 
         # 启动日志
         self.log("工具启动", "就绪 — 等待操作")
