@@ -99,36 +99,38 @@ QPushButton#clearAllBtn:pressed {
     background-color: #C02E25;
 }
 
-/* 常用变量按钮 — 琥珀色 */
+/* 常用变量按钮 — 浅橙色底 */
 QPushButton#commonVarBtn {
-    background-color: #FF9500;
-    color: #FFFFFF;
-    border: none;
+    background-color: #FFF0E0;
+    color: #C86500;
+    border: 1px solid #F0D0B0;
     font-weight: 600;
 }
 
 QPushButton#commonVarBtn:hover {
-    background-color: #E68600;
+    background-color: #FFE4CC;
+    border: 1px solid #E8C098;
 }
 
 QPushButton#commonVarBtn:pressed {
-    background-color: #CC7700;
+    background-color: #FFD8B8;
 }
 
-/* 变量前缀按钮 — 蓝绿色 */
+/* 变量前缀按钮 — 浅蓝色底 */
 QPushButton#prefixBtn {
-    background-color: #5AC8FA;
-    color: #FFFFFF;
-    border: none;
+    background-color: #E8F4FD;
+    color: #0070C0;
+    border: 1px solid #C0DCF0;
     font-weight: 600;
 }
 
 QPushButton#prefixBtn:hover {
-    background-color: #4DB8E8;
+    background-color: #D4ECFA;
+    border: 1px solid #A8CCE8;
 }
 
 QPushButton#prefixBtn:pressed {
-    background-color: #40A8D6;
+    background-color: #C0E0F5;
 }
 
 /* ===== 输入框 ===== */
