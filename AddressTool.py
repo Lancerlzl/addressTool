@@ -1278,9 +1278,10 @@ class AddressFinder(QWidget):
         """显示关于对话框"""
         QMessageBox.about(self, "关于 AddressTool",
             f"<h3>OUT文件取址工具</h3>"
-            f"<p>版本: V20260525</p>"
+            f"<p>版本: V20260527</p>"
             f"<p>公司: Sineng</p>"
             f"<p>作者: Lancer</p>"
+            f"<p>项目地址: <a href='https://github.com/Lancerlzl/addressTool'>github.com/Lancerlzl/addressTool</a></p>"
         )
 
     def initUI(self):

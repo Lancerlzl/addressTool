@@ -2,7 +2,7 @@
 
 ## 时间
 
-2026-05-24 ~ 2026-05-25
+2026-05-24 ~ 2026-05-27
 
 ## Git 分支
 
@@ -76,6 +76,10 @@ _is_eabi_format() → 有 <elf32_ehdr>？
 - `常用变量` / `变量前缀` 按钮统一蓝灰色系，深浅微差渐变
 - 程序化生成蓝紫渐变 `A` 字母图标，替换默认 Python 窗口图标
 
+### 9. 关于对话框添加 GitHub 链接 (2026-05-27)
+- 关于对话框新增项目地址: `https://github.com/Lancerlzl/addressTool`
+- 版本号更新为 V20260527
+
 ## TODO / 待续
 
 - [x] 过滤非 `DW_OP_addr` 类型的地址 — `_find_dwarf_value()` 自动过滤 `DW_OP_bregXX` / `DW_OP_fbreg`
@@ -85,6 +89,7 @@ _is_eabi_format() → 有 <elf32_ehdr>？
 - [x] 常用变量/变量前缀按钮颜色区分
 - [x] App 图标
 - [ ] 编译一个 COFF 格式的老 .out 文件做完整回归测试
+- [x] 关于对话框添加 GitHub 项目地址
 - [ ] 考虑支持 `_linkInfo.xml` 作为 ofd 工具不可用时的 fallback
 
 ## 参考路径
